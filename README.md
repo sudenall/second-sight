@@ -1,5 +1,7 @@
 # Second Sight
 
+*A second brain that remembers what you forgot to review.*
+
 Claude.ai'de pinlenmiş sohbetlerden öğrenilen bilgileri, kategorize edilmiş ve
 ilişkisel bir Obsidian bilgi tabanına (ve ileride bir web arayüzüne) dönüştüren
 kişisel "second brain" sistemi.
