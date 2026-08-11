@@ -59,7 +59,12 @@ function Sync-Repo {
     }
 
     & git --git-dir="$root\$GitDir" --work-tree="$root" commit -m $Message
+
     & git --git-dir="$root\$GitDir" --work-tree="$root" push
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  Commit tamam, ama push basarisiz (remote yok/hata). Manuel push gerekebilir." -ForegroundColor Yellow
+        return
+    }
 
     Write-Host "  Commit + push tamamlandi." -ForegroundColor Green
 }
