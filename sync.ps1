@@ -1,0 +1,68 @@
+<#
+Second Sight - iki bagimsiz git deposunu (public/private) tek komutla
+senkronize eder. Ayni klasor iki ayri .git dizini tarafindan izlenir:
+  .git-public  -> altyapi/kod (sablonlar, dashboard, README, script)
+  .git-private -> gercek notlar (Sessions, Concepts, Weekly-Summaries,
+                   _staging, _manifest.json, _index)
+
+Kullanim:
+  powershell -File sync.ps1
+  powershell -File sync.ps1 -Message "Haftalik guncelleme"
+#>
+
+param(
+    [string]$Message = "Sync: $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
+)
+
+$root = $PSScriptRoot
+
+$publicPaths = @(
+    "_templates",
+    "Reminders\Home.md",
+    "README.md",
+    "SCHEDULING.md",
+    "sync.ps1",
+    ".gitignore"
+)
+
+$privatePaths = @(
+    "Sessions",
+    "Concepts",
+    "Weekly-Summaries",
+    "_staging",
+    "_manifest.json",
+    "_index",
+    ".gitignore"
+)
+
+function Sync-Repo {
+    param(
+        [string]$GitDir,
+        [string]$Label,
+        [string[]]$Paths
+    )
+
+    Write-Host "== $Label ($GitDir) ==" -ForegroundColor Cyan
+
+    $existing = $Paths | Where-Object { Test-Path (Join-Path $root $_) }
+    if ($existing.Count -eq 0) {
+        Write-Host "  Izlenecek yol bulunamadi, atlaniyor." -ForegroundColor Yellow
+        return
+    }
+
+    & git --git-dir="$root\$GitDir" --work-tree="$root" add -- $existing
+
+    & git --git-dir="$root\$GitDir" --work-tree="$root" diff --cached --quiet
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  Degisiklik yok." -ForegroundColor DarkGray
+        return
+    }
+
+    & git --git-dir="$root\$GitDir" --work-tree="$root" commit -m $Message
+    & git --git-dir="$root\$GitDir" --work-tree="$root" push
+
+    Write-Host "  Commit + push tamamlandi." -ForegroundColor Green
+}
+
+Sync-Repo -GitDir ".git-public"  -Label "Public (second-sight)"       -Paths $publicPaths
+Sync-Repo -GitDir ".git-private" -Label "Private (second-sight-vault)" -Paths $privatePaths
