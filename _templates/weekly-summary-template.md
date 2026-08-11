@@ -2,6 +2,7 @@
 type: weekly-summary
 week: ""
 category: ""
+subcategory: ""
 ---
 ## Bu hafta eklenen kavramlar
 (concept listesi + her biri için "zorlandığım nokta")

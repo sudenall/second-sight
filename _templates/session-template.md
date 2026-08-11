@@ -4,6 +4,7 @@ title: ""
 date_learned: <%tp.date.now("YYYY-MM-DD")%>
 source_url: ""
 category: ""
+subcategory: ""
 concepts: []
 ---
 ## Oturum Özeti

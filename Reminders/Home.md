@@ -22,16 +22,29 @@ if (categories.size === 0) {
 
 for (const cat of Array.from(categories).sort()) {
     dv.header(3, cat);
-    const rows = concepts
-        .where(c => String(c.category) === cat)
-        .sort(c => String(c.date_learned ?? ""), 'desc')
-        .map(c => [
-            c.file.link,
-            c.difficulty ?? "-",
-            c.date_learned ? String(c.date_learned) : "-",
-            c.status ?? "-"
-        ]);
-    dv.table(["Kavram", "Zorluk", "Öğrenilme Tarihi", "Durum"], rows);
+
+    const inCat = concepts.where(c => String(c.category) === cat);
+    const subcats = new Set();
+    for (const c of inCat) {
+        if (c.subcategory) subcats.add(String(c.subcategory));
+    }
+
+    if (subcats.size === 0) {
+        const rows = inCat
+            .sort(c => String(c.date_learned ?? ""), 'desc')
+            .map(c => [c.file.link, c.difficulty ?? "-", c.date_learned ? String(c.date_learned) : "-", c.status ?? "-"]);
+        dv.table(["Kavram", "Zorluk", "Öğrenilme Tarihi", "Durum"], rows);
+        continue;
+    }
+
+    for (const sub of Array.from(subcats).sort()) {
+        dv.header(4, sub);
+        const rows = inCat
+            .where(c => String(c.subcategory) === sub)
+            .sort(c => String(c.date_learned ?? ""), 'desc')
+            .map(c => [c.file.link, c.difficulty ?? "-", c.date_learned ? String(c.date_learned) : "-", c.status ?? "-"]);
+        dv.table(["Kavram", "Zorluk", "Öğrenilme Tarihi", "Durum"], rows);
+    }
 }
 ```
 

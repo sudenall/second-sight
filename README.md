@@ -64,6 +64,13 @@ varsa `related` alanları iki yönlü bağlanır. Session + Concept notları
 üretilir, `review_due = date_learned + 3 gün` hesaplanır. İşlem bitince
 manifest/index güncellenir, işlenen `_staging` dosyası silinir.
 
+**Kategori iki katmanlı**: `category` (geniş üst başlık, örn. "AI Certified
+Architect") ve `subcategory` (o üst başlık altında daha spesifik, örn.
+"Claude Developer Platform"). İkisi de esnek büyüyen bir taksonomi —
+`_index/categories.json`'da her `category` kendi `subcategories` listesini
+taşır. Mevcut olanlardan uygun yoksa (kategori ya da alt kategori fark etmez)
+yeni eklemeden önce onay istenir.
+
 Eksiksizlik kuralı: bir sohbette geçen HER ayrı öğrenme birimi (kavram,
 teknik/yöntem, mimari karar, sorun, çözüm, düzelen yanlış anlama,
 karşılaştırma/trade-off) ayrı bir concept notu adayıdır. Önemsiz görünse bile

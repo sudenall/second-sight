@@ -4,6 +4,7 @@ title: ""
 date_learned: <%tp.date.now("YYYY-MM-DD")%>
 parent_session: ""
 category: ""
+subcategory: ""
 tags: []
 difficulty: ""
 review_due: ""
