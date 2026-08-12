@@ -62,55 +62,260 @@ for (const cat of Array.from(categories).sort()) {
 
 Her gün için sırayla kontrol edilir: tam 3 gün önce öğrenilmiş bir kavram var
 mı → yoksa 2 gün önce → yoksa dün → hiçbiri yoksa `review_due` tarihi o günden
-önce olan en eski kavram gösterilir.
+önce olan en eski kavram gösterilir. Bir kavram, bu 3 günlük pencere içinde
+(hangi gün önce yakalarsa) **sadece bir kez** gösterilir; aynı render içinde
+başka bir gün sütununda tekrar çıkmaz. Sağındaki **✓ Hatırladım** linkine
+tıklayınca `last_reminded` işaretlenir ve o kavram bir daha (ne bu hafta ne
+gecikmiş tekrarlarda) hiç görünmez — tıklamazsan, penceresi içinde kaldığı
+sürece (ya da gecikmiş tekrar olarak) görünmeye devam eder.
 
 ```dataviewjs
-// Bkz. yukarıdaki normDate notu - aynı sebeple burada da normalize ediyoruz.
 function normDate(v) {
     if (!v) return null;
     const d = dv.date(v);
     return d ? d.toFormat("yyyy-MM-dd") : String(v);
 }
 
-const concepts = dv.pages('"Concepts"').where(p => p.type === "concept" && p.date_learned);
+async function markReminded(path) {
+    const file = app.vault.getAbstractFileByPath(path);
+    if (!file) return;
+    await app.fileManager.processFrontMatter(file, (fm) => {
+        fm.last_reminded = moment().format("YYYY-MM-DD");
+    });
+}
+
+function renderConceptLine(c, note) {
+    const line = document.createElement("div");
+    line.style.marginBottom = "4px";
+
+    const a = document.createElement("a");
+    a.className = "internal-link";
+    a.innerText = c.title ?? c.file.name;
+    a.href = c.file.path;
+    a.onclick = (e) => {
+        e.preventDefault();
+        app.workspace.openLinkText(c.file.path, "", false);
+    };
+    line.appendChild(a);
+    line.appendChild(document.createTextNode(` (${note}) `));
+
+    const btn = document.createElement("a");
+    btn.innerText = "✓ Hatırladım";
+    btn.style.cursor = "pointer";
+    btn.style.fontSize = "0.85em";
+    btn.style.color = "var(--text-accent)";
+    btn.onclick = async (e) => {
+        e.preventDefault();
+        btn.innerText = "…";
+        await markReminded(c.file.path);
+    };
+    line.appendChild(btn);
+    return line;
+}
+
+// last_reminded doluysa bu kavram artık hiçbir yerde değerlendirilmiyor.
+const concepts = dv.pages('"Concepts"')
+    .where(p => p.type === "concept" && p.date_learned && !p.last_reminded);
 
 const days = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const weekStart = moment().startOf("isoWeek"); // Pazartesi
 
-function conceptsOn(dateStr) {
-    return concepts.where(c => normDate(c.date_learned) === dateStr);
-}
+// Bu render içinde bir gün sütununda gösterilen kavram, aynı render'daki
+// diğer gün sütunlarında tekrar edilmesin diye burada işaretleniyor.
+const claimed = new Set();
 
-function findReminder(dayMoment) {
+function buildCell(dayMoment) {
     const dayStr = dayMoment.format("YYYY-MM-DD");
+    const cell = document.createElement("div");
+
     for (const offset of [3, 2, 1]) {
         const targetStr = dayMoment.clone().subtract(offset, "days").format("YYYY-MM-DD");
-        const matches = conceptsOn(targetStr);
+        const matches = concepts.where(c => normDate(c.date_learned) === targetStr && !claimed.has(c.file.path));
         if (matches.length > 0) {
             const label = offset === 1 ? "dün" : `${offset} gün önce`;
-            return matches
-                .map(c => `${c.file.link} (${label} öğrenmiştin, hatırla)`)
-                .join("<br>");
+            for (const c of matches) {
+                claimed.add(c.file.path);
+                cell.appendChild(renderConceptLine(c, `${label} öğrenmiştin, hatırla`));
+            }
+            return cell;
         }
     }
+
     const overdue = concepts
-        .where(c => c.review_due && normDate(c.review_due) < dayStr)
+        .where(c => c.review_due && !claimed.has(c.file.path) && normDate(c.review_due) < dayStr)
         .sort(c => normDate(c.review_due), 'asc');
     if (overdue.length > 0) {
         const oldest = overdue[0];
-        return `${oldest.file.link} (en son bunu öğrenmiştin, hâlâ tekrar etmedin)`;
+        claimed.add(oldest.file.path);
+        cell.appendChild(renderConceptLine(oldest, "en son bunu öğrenmiştin, hâlâ tekrar etmedin"));
+        return cell;
     }
-    return "-";
+
+    cell.innerText = "-";
+    return cell;
 }
 
-const row = days.map((_, i) => findReminder(weekStart.clone().add(i, "days")));
-dv.table(days, [row]);
+const table = document.createElement("table");
+const headRow = document.createElement("tr");
+for (const d of days) {
+    const th = document.createElement("th");
+    th.innerText = d;
+    headRow.appendChild(th);
+}
+table.appendChild(headRow);
+
+const bodyRow = document.createElement("tr");
+// Pazartesi'den Pazar'a sırayla işleniyor ki "hangisi önce yakalarsa" kuralı
+// kronolojik olarak en erken günü kazansın (claimed kümesi bu sırayla dolar).
+for (let i = 0; i < 7; i++) {
+    const td = document.createElement("td");
+    td.style.verticalAlign = "top";
+    td.appendChild(buildCell(weekStart.clone().add(i, "days")));
+    bodyRow.appendChild(td);
+}
+table.appendChild(bodyRow);
+
+dv.container.appendChild(table);
+```
+
+## Haftalık Geriye Dönük Özet
+
+Hatırlatma mantığından tamamen bağımsız — bir kez gösterilip kaybolmaz, her
+zaman (aşağıdaki 10 sınırı dahilinde) o haftada öğrenilenleri göstermeye
+devam eder. `date_learned`'e göre gruplanır, kategori/alt kategori başlıkları
+tıklanınca açılır.
+
+```dataviewjs
+function normDate(v) {
+    if (!v) return null;
+    const d = dv.date(v);
+    return d ? d.toFormat("yyyy-MM-dd") : String(v);
+}
+
+const concepts = dv.pages('"Concepts"').where(p => p.type === "concept" && p.date_learned).array();
+
+function periodMarkdown(periodConcepts) {
+    if (periodConcepts.length === 0) return "_Bu dönemde kavram yok._\n";
+
+    const byCategory = {};
+    for (const c of periodConcepts) {
+        const cat = c.category ? String(c.category) : "(Kategorisiz)";
+        const sub = c.subcategory ? String(c.subcategory) : "(Alt kategorisiz)";
+        byCategory[cat] = byCategory[cat] || {};
+        byCategory[cat][sub] = byCategory[cat][sub] || [];
+        byCategory[cat][sub].push(c);
+    }
+
+    let md = "";
+    for (const cat of Object.keys(byCategory).sort()) {
+        const subMap = byCategory[cat];
+        const catTotal = Object.values(subMap).reduce((sum, arr) => sum + arr.length, 0);
+        md += `<details><summary>${cat} (${catTotal})</summary>\n\n`;
+        for (const sub of Object.keys(subMap).sort()) {
+            const list = subMap[sub].sort((a, b) => (normDate(b.date_learned) ?? "").localeCompare(normDate(a.date_learned) ?? ""));
+            md += `<details><summary>${sub} (${list.length})</summary>\n\n`;
+            for (const c of list.slice(0, 10)) {
+                md += `- [[${c.file.name}|${c.title ?? c.file.name}]]\n`;
+            }
+            if (list.length > 10) {
+                md += `\n_+${list.length - 10} tane daha (toplam ${list.length})_\n`;
+            }
+            md += `\n</details>\n\n`;
+        }
+        md += `</details>\n\n`;
+    }
+    return md;
+}
+
+function weekRange(n) { // n=1 -> geçen hafta
+    const start = moment().startOf("isoWeek").subtract(n, "weeks");
+    const end = start.clone().endOf("isoWeek");
+    return [start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD")];
+}
+
+const weekLabels = ["Geçen Hafta", "2 Hafta Önce", "3 Hafta Önce", "4 Hafta Önce"];
+const cols = weekLabels.map((label, idx) => {
+    const [start, end] = weekRange(idx + 1);
+    const periodConcepts = concepts.filter(c => {
+        const d = normDate(c.date_learned);
+        return d && d >= start && d <= end;
+    });
+    return `<div style="flex:1;min-width:220px;">\n\n**${label} (${periodConcepts.length})**\n\n${periodMarkdown(periodConcepts)}\n</div>`;
+});
+
+const wrap = `<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;">\n\n${cols.join("\n\n")}\n\n</div>`;
+dv.el("div", wrap);
+```
+
+## Aylık Geriye Dönük Özet
+
+Aynı mantık, aylık pencerelerle (son 3 ay).
+
+```dataviewjs
+function normDate(v) {
+    if (!v) return null;
+    const d = dv.date(v);
+    return d ? d.toFormat("yyyy-MM-dd") : String(v);
+}
+
+const concepts = dv.pages('"Concepts"').where(p => p.type === "concept" && p.date_learned).array();
+
+function periodMarkdown(periodConcepts) {
+    if (periodConcepts.length === 0) return "_Bu dönemde kavram yok._\n";
+
+    const byCategory = {};
+    for (const c of periodConcepts) {
+        const cat = c.category ? String(c.category) : "(Kategorisiz)";
+        const sub = c.subcategory ? String(c.subcategory) : "(Alt kategorisiz)";
+        byCategory[cat] = byCategory[cat] || {};
+        byCategory[cat][sub] = byCategory[cat][sub] || [];
+        byCategory[cat][sub].push(c);
+    }
+
+    let md = "";
+    for (const cat of Object.keys(byCategory).sort()) {
+        const subMap = byCategory[cat];
+        const catTotal = Object.values(subMap).reduce((sum, arr) => sum + arr.length, 0);
+        md += `<details><summary>${cat} (${catTotal})</summary>\n\n`;
+        for (const sub of Object.keys(subMap).sort()) {
+            const list = subMap[sub].sort((a, b) => (normDate(b.date_learned) ?? "").localeCompare(normDate(a.date_learned) ?? ""));
+            md += `<details><summary>${sub} (${list.length})</summary>\n\n`;
+            for (const c of list.slice(0, 10)) {
+                md += `- [[${c.file.name}|${c.title ?? c.file.name}]]\n`;
+            }
+            if (list.length > 10) {
+                md += `\n_+${list.length - 10} tane daha (toplam ${list.length})_\n`;
+            }
+            md += `\n</details>\n\n`;
+        }
+        md += `</details>\n\n`;
+    }
+    return md;
+}
+
+function monthRange(n) { // n=1 -> geçen ay
+    const start = moment().startOf("month").subtract(n, "months");
+    const end = start.clone().endOf("month");
+    return [start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD")];
+}
+
+const monthLabels = ["Geçen Ay", "Önceki Ay", "Ondan Önceki Ay"];
+const cols = monthLabels.map((label, idx) => {
+    const [start, end] = monthRange(idx + 1);
+    const periodConcepts = concepts.filter(c => {
+        const d = normDate(c.date_learned);
+        return d && d >= start && d <= end;
+    });
+    return `<div style="flex:1;min-width:220px;">\n\n**${label} (${periodConcepts.length})**\n\n${periodMarkdown(periodConcepts)}\n</div>`;
+});
+
+const wrap = `<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;">\n\n${cols.join("\n\n")}\n\n</div>`;
+dv.el("div", wrap);
 ```
 
 ## Gecikmiş Tekrarlar (review_due geçmiş, hiç gösterilmemiş olabilir)
 
 ```dataviewjs
-// Bkz. yukarıdaki normDate notu - aynı sebeple burada da normalize ediyoruz.
 function normDate(v) {
     if (!v) return null;
     const d = dv.date(v);
@@ -119,7 +324,7 @@ function normDate(v) {
 
 const today = moment().format("YYYY-MM-DD");
 const overdue = dv.pages('"Concepts"')
-    .where(p => p.type === "concept" && p.review_due && normDate(p.review_due) < today)
+    .where(p => p.type === "concept" && p.review_due && !p.last_reminded && normDate(p.review_due) < today)
     .sort(p => normDate(p.review_due), 'asc');
 
 if (overdue.length === 0) {

@@ -8,6 +8,7 @@ subcategory: ""
 tags: []
 difficulty: ""
 review_due: ""
+last_reminded: ""
 status: öğrenildi
 related: []
 ---
