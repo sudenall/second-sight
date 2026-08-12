@@ -64,10 +64,14 @@ Her gün için sırayla kontrol edilir: tam 3 gün önce öğrenilmiş bir kavra
 mı → yoksa 2 gün önce → yoksa dün → hiçbiri yoksa `review_due` tarihi o günden
 önce olan en eski kavram gösterilir. Bir kavram, bu 3 günlük pencere içinde
 (hangi gün önce yakalarsa) **sadece bir kez** gösterilir; aynı render içinde
-başka bir gün sütununda tekrar çıkmaz. Sağındaki **✓ Hatırladım** linkine
-tıklayınca `last_reminded` işaretlenir ve o kavram bir daha (ne bu hafta ne
-gecikmiş tekrarlarda) hiç görünmez — tıklamazsan, penceresi içinde kaldığı
-sürece (ya da gecikmiş tekrar olarak) görünmeye devam eder.
+başka bir gün sütununda tekrar çıkmaz.
+
+`last_reminded`, artık bir filtre değil — sadece görüldü/hatırlandı
+durumunu gösteren bir işaret. Her gün sütunu kendi içinde ikiye ayrılır:
+üstte henüz hatırlanmamışlar (yanlarında **✓ Hatırladım** linki), bir çizgi,
+altında hatırlanmışlar (soluk, ✓ işaretli, tıklanamaz). Linke tıklayınca
+`last_reminded` işaretlenir ve concept bir sonraki render'da otomatik olarak
+üst gruptan alt gruba düşer — kaybolmaz, sadece pasifleşir.
 
 ```dataviewjs
 function normDate(v) {
@@ -84,9 +88,12 @@ async function markReminded(path) {
     });
 }
 
-function renderConceptLine(c, note) {
+function renderConceptLine(c, note, reminded) {
     const line = document.createElement("div");
     line.style.marginBottom = "4px";
+    if (reminded) line.style.opacity = "0.55";
+
+    if (reminded) line.appendChild(document.createTextNode("✓ "));
 
     const a = document.createElement("a");
     a.className = "internal-link";
@@ -99,23 +106,25 @@ function renderConceptLine(c, note) {
     line.appendChild(a);
     line.appendChild(document.createTextNode(` (${note}) `));
 
-    const btn = document.createElement("a");
-    btn.innerText = "✓ Hatırladım";
-    btn.style.cursor = "pointer";
-    btn.style.fontSize = "0.85em";
-    btn.style.color = "var(--text-accent)";
-    btn.onclick = async (e) => {
-        e.preventDefault();
-        btn.innerText = "…";
-        await markReminded(c.file.path);
-    };
-    line.appendChild(btn);
+    if (!reminded) {
+        const btn = document.createElement("a");
+        btn.innerText = "✓ Hatırladım";
+        btn.style.cursor = "pointer";
+        btn.style.fontSize = "0.85em";
+        btn.style.color = "var(--text-accent)";
+        btn.onclick = async (e) => {
+            e.preventDefault();
+            btn.innerText = "…";
+            await markReminded(c.file.path);
+        };
+        line.appendChild(btn);
+    }
     return line;
 }
 
-// last_reminded doluysa bu kavram artık hiçbir yerde değerlendirilmiyor.
-const concepts = dv.pages('"Concepts"')
-    .where(p => p.type === "concept" && p.date_learned && !p.last_reminded);
+// last_reminded artık bir filtre değil, sadece görüldü/hatırlandı durumu -
+// concept'ler yine güne atanıyor, sadece görüntülemede iki gruba ayrılıyor.
+const concepts = dv.pages('"Concepts"').where(p => p.type === "concept" && p.date_learned);
 
 const days = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const weekStart = moment().startOf("isoWeek"); // Pazartesi
@@ -126,7 +135,7 @@ const claimed = new Set();
 
 function buildCell(dayMoment) {
     const dayStr = dayMoment.format("YYYY-MM-DD");
-    const cell = document.createElement("div");
+    let entries = []; // {c, note}
 
     for (const offset of [3, 2, 1]) {
         const targetStr = dayMoment.clone().subtract(offset, "days").format("YYYY-MM-DD");
@@ -135,23 +144,36 @@ function buildCell(dayMoment) {
             const label = offset === 1 ? "dün" : `${offset} gün önce`;
             for (const c of matches) {
                 claimed.add(c.file.path);
-                cell.appendChild(renderConceptLine(c, `${label} öğrenmiştin, hatırla`));
+                entries.push({ c, note: `${label} öğrenmiştin, hatırla` });
             }
-            return cell;
+            break; // gün belirlendi, offset döngüsünden çık
         }
     }
 
-    const overdue = concepts
-        .where(c => c.review_due && !claimed.has(c.file.path) && normDate(c.review_due) < dayStr)
-        .sort(c => normDate(c.review_due), 'asc');
-    if (overdue.length > 0) {
-        const oldest = overdue[0];
-        claimed.add(oldest.file.path);
-        cell.appendChild(renderConceptLine(oldest, "en son bunu öğrenmiştin, hâlâ tekrar etmedin"));
+    if (entries.length === 0) {
+        const overdue = concepts
+            .where(c => c.review_due && !claimed.has(c.file.path) && normDate(c.review_due) < dayStr)
+            .sort(c => normDate(c.review_due), 'asc');
+        if (overdue.length > 0) {
+            const oldest = overdue[0];
+            claimed.add(oldest.file.path);
+            entries.push({ c: oldest, note: "en son bunu öğrenmiştin, hâlâ tekrar etmedin" });
+        }
+    }
+
+    const cell = document.createElement("div");
+    if (entries.length === 0) {
+        cell.innerText = "-";
         return cell;
     }
 
-    cell.innerText = "-";
+    const notReminded = entries.filter(e => !e.c.last_reminded);
+    const reminded = entries.filter(e => e.c.last_reminded);
+
+    for (const e of notReminded) cell.appendChild(renderConceptLine(e.c, e.note, false));
+    if (notReminded.length > 0 && reminded.length > 0) cell.appendChild(document.createElement("hr"));
+    for (const e of reminded) cell.appendChild(renderConceptLine(e.c, e.note, true));
+
     return cell;
 }
 
@@ -180,10 +202,13 @@ dv.container.appendChild(table);
 
 ## Haftalık Geriye Dönük Özet
 
-Hatırlatma mantığından tamamen bağımsız — bir kez gösterilip kaybolmaz, her
-zaman (aşağıdaki 10 sınırı dahilinde) o haftada öğrenilenleri göstermeye
+Hatırlatma *filtresinden* tamamen bağımsız — bir kez gösterilip kaybolmaz,
+her zaman (aşağıdaki 10 sınırı dahilinde) o haftada öğrenilenleri göstermeye
 devam eder. `date_learned`'e göre gruplanır, kategori/alt kategori başlıkları
-tıklanınca açılır.
+tıklanınca açılır. Her alt kategorinin altındaki concept listesi kendi
+içinde `last_reminded` durumuna göre ikiye ayrılır: üstte hatırlanmamışlar,
+bir çizgi, altında soluk/✓ işaretli hatırlanmışlar (burada tıklanabilir
+değiller, sadece durumu gösterir).
 
 ```dataviewjs
 function normDate(v) {
@@ -214,9 +239,21 @@ function periodMarkdown(periodConcepts) {
         for (const sub of Object.keys(subMap).sort()) {
             const list = subMap[sub].sort((a, b) => (normDate(b.date_learned) ?? "").localeCompare(normDate(a.date_learned) ?? ""));
             md += `<details><summary>${sub} (${list.length})</summary>\n\n`;
-            for (const c of list.slice(0, 10)) {
+
+            const shown = list.slice(0, 10);
+            const notReminded = shown.filter(c => !c.last_reminded);
+            const reminded = shown.filter(c => c.last_reminded);
+
+            for (const c of notReminded) {
                 md += `- [[${c.file.name}|${c.title ?? c.file.name}]]\n`;
             }
+            if (notReminded.length > 0 && reminded.length > 0) {
+                md += `\n---\n\n`;
+            }
+            for (const c of reminded) {
+                md += `- <span style="opacity:0.55;">✓ [[${c.file.name}|${c.title ?? c.file.name}]]</span>\n`;
+            }
+
             if (list.length > 10) {
                 md += `\n_+${list.length - 10} tane daha (toplam ${list.length})_\n`;
             }
@@ -280,9 +317,21 @@ function periodMarkdown(periodConcepts) {
         for (const sub of Object.keys(subMap).sort()) {
             const list = subMap[sub].sort((a, b) => (normDate(b.date_learned) ?? "").localeCompare(normDate(a.date_learned) ?? ""));
             md += `<details><summary>${sub} (${list.length})</summary>\n\n`;
-            for (const c of list.slice(0, 10)) {
+
+            const shown = list.slice(0, 10);
+            const notReminded = shown.filter(c => !c.last_reminded);
+            const reminded = shown.filter(c => c.last_reminded);
+
+            for (const c of notReminded) {
                 md += `- [[${c.file.name}|${c.title ?? c.file.name}]]\n`;
             }
+            if (notReminded.length > 0 && reminded.length > 0) {
+                md += `\n---\n\n`;
+            }
+            for (const c of reminded) {
+                md += `- <span style="opacity:0.55;">✓ [[${c.file.name}|${c.title ?? c.file.name}]]</span>\n`;
+            }
+
             if (list.length > 10) {
                 md += `\n_+${list.length - 10} tane daha (toplam ${list.length})_\n`;
             }
@@ -315,6 +364,9 @@ dv.el("div", wrap);
 
 ## Gecikmiş Tekrarlar (review_due geçmiş, hiç gösterilmemiş olabilir)
 
+Diğer tablolarla tutarlı olsun diye burada da `last_reminded` sadece
+görüntüleme grubunu belirliyor, listeden çıkarmıyor.
+
 ```dataviewjs
 function normDate(v) {
     if (!v) return null;
@@ -324,15 +376,26 @@ function normDate(v) {
 
 const today = moment().format("YYYY-MM-DD");
 const overdue = dv.pages('"Concepts"')
-    .where(p => p.type === "concept" && p.review_due && !p.last_reminded && normDate(p.review_due) < today)
-    .sort(p => normDate(p.review_due), 'asc');
+    .where(p => p.type === "concept" && p.review_due && normDate(p.review_due) < today)
+    .sort(p => normDate(p.review_due), 'asc')
+    .array();
 
 if (overdue.length === 0) {
     dv.paragraph("Gecikmiş tekrar yok.");
 } else {
-    dv.table(
-        ["Kavram", "Kategori", "review_due"],
-        overdue.map(c => [c.file.link, c.category ?? "-", normDate(c.review_due)])
-    );
+    const notReminded = overdue.filter(c => !c.last_reminded);
+    const reminded = overdue.filter(c => c.last_reminded);
+
+    let md = "";
+    for (const c of notReminded) {
+        md += `- [[${c.file.name}|${c.title ?? c.file.name}]] — *${c.category ?? "-"}*, review_due: ${normDate(c.review_due)}\n`;
+    }
+    if (notReminded.length > 0 && reminded.length > 0) {
+        md += "\n---\n\n";
+    }
+    for (const c of reminded) {
+        md += `- <span style="opacity:0.55;">✓ [[${c.file.name}|${c.title ?? c.file.name}]] — *${c.category ?? "-"}*, review_due: ${normDate(c.review_due)}</span>\n`;
+    }
+    dv.el("div", md);
 }
 ```
