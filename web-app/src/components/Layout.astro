@@ -1,0 +1,83 @@
+---
+import "../styles/global.css";
+import { t } from "../lib/i18n";
+import T from "./T.astro";
+
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="tr" data-lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title} · {t("site_title")}</title>
+    <!-- Runs before paint so the language toggle never flashes the wrong
+         language on reload. Keep this tiny and dependency-free. -->
+    <script is:inline>
+      (function () {
+        try {
+          var saved = localStorage.getItem("ss-lang");
+          if (saved === "en") document.documentElement.dataset.lang = "en";
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body class="flex min-h-screen flex-col">
+    <header class="border-b border-border bg-bg-soft">
+      <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
+        <a href="/" class="text-lg font-semibold text-ink no-underline">
+          Second Sight
+        </a>
+        <nav class="flex items-center gap-4 text-sm">
+          <a href="/"><T k="nav_home" /></a>
+          <a href="/weekly-summaries/"><T k="nav_weekly_reports" /></a>
+          <button
+            id="lang-toggle"
+            type="button"
+            class="rounded border border-border px-2 py-1 text-xs font-semibold text-ink-muted hover:border-accent hover:text-accent"
+            aria-label="Toggle interface language"
+          >
+            <T k="lang_toggle_label" />
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
+      <slot />
+    </main>
+
+    <footer class="border-t border-border px-4 py-4 text-center text-xs text-ink-faint">
+      Second Sight — statik, salt-okunur görünüm. Notlar Obsidian'da düzenlenir.
+    </footer>
+
+    <script>
+      // Toggle button wiring + broadcast for client-rendered islands
+      // (daily reminders / retrospective tables) that need to re-render
+      // their dynamically generated strings in the new language.
+      const btn = document.getElementById("lang-toggle");
+      function currentLang() {
+        return document.documentElement.dataset.lang === "en" ? "en" : "tr";
+      }
+      function setLang(lang) {
+        if (lang === "en") {
+          document.documentElement.dataset.lang = "en";
+        } else {
+          delete document.documentElement.dataset.lang;
+        }
+        try {
+          localStorage.setItem("ss-lang", lang);
+        } catch (e) {}
+        window.dispatchEvent(new CustomEvent("ss-lang-change", { detail: { lang } }));
+      }
+      btn?.addEventListener("click", () => {
+        setLang(currentLang() === "en" ? "tr" : "en");
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,180 @@
+---
+import T from "./T.astro";
+
+interface ConceptRef {
+  slug: string;
+  title: string;
+  title_en: string;
+  date_learned: string;
+  review_due: string;
+  last_reminded: string;
+}
+interface Props {
+  concepts: ConceptRef[];
+}
+const { concepts } = Astro.props;
+---
+
+<section class="card mb-6">
+  <h2 class="mb-1 text-base font-semibold">
+    <T k="daily_reminders_title" />
+  </h2>
+  <p class="mb-4 text-xs text-ink-faint">
+    <span class="lang-tr"
+      >Bu tablo tarayıcında hesaplanır, ziyaret ettiğin güne göre günceldir. "Hatırlandı" işaretlemesi
+      sadece Obsidian'da yapılır — burada tıklanamaz.</span
+    ><span class="lang-en" hidden
+      >This table is computed in your browser, always current for whichever day you're viewing it.
+      Marking something as reviewed only happens in Obsidian — it isn't clickable here.</span
+    >
+  </p>
+  <div id="daily-reminders-root" class="overflow-x-auto">
+    <p class="text-sm text-ink-faint"><T k="empty_no_concepts" /></p>
+  </div>
+</section>
+
+<script define:vars={{ concepts }}>
+  window.__ssConceptsForReminders = concepts;
+</script>
+<script>
+  import { dict } from "../lib/i18n";
+
+  const concepts = window.__ssConceptsForReminders;
+  const DAY_KEYS = ["day_mon", "day_tue", "day_wed", "day_thu", "day_fri", "day_sat", "day_sun"];
+
+  function fmt(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  function addDays(d, n) {
+    const nd = new Date(d);
+    nd.setDate(nd.getDate() + n);
+    return nd;
+  }
+  function startOfIsoWeek(d) {
+    const nd = new Date(d);
+    const day = nd.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    nd.setDate(nd.getDate() + diff);
+    nd.setHours(0, 0, 0, 0);
+    return nd;
+  }
+
+  function buildColumns() {
+    const today = new Date();
+    const weekStart = startOfIsoWeek(today);
+    const claimed = new Set();
+    const columns = [];
+
+    for (let i = 0; i < 7; i++) {
+      const day = addDays(weekStart, i);
+      const dayStr = fmt(day);
+      let entries = [];
+
+      for (const offset of [3, 2, 1]) {
+        const targetStr = fmt(addDays(day, -offset));
+        const matches = concepts.filter((c) => c.date_learned === targetStr && !claimed.has(c.slug));
+        if (matches.length > 0) {
+          for (const c of matches) {
+            claimed.add(c.slug);
+            entries.push({ c, offset });
+          }
+          break;
+        }
+      }
+
+      if (entries.length === 0) {
+        const overdue = concepts
+          .filter((c) => c.review_due && !claimed.has(c.slug) && c.review_due < dayStr)
+          .sort((a, b) => (a.review_due < b.review_due ? -1 : 1));
+        if (overdue.length > 0) {
+          const oldest = overdue[0];
+          claimed.add(oldest.slug);
+          entries.push({ c: oldest, offset: null });
+        }
+      }
+
+      columns.push({ dayKey: DAY_KEYS[i], entries });
+    }
+    return columns;
+  }
+
+  function pickTitle(c, lang) {
+    return lang === "en" && c.title_en ? c.title_en : c.title;
+  }
+
+  function noteText(entry, lang, dict) {
+    if (entry.offset === null) return dict.overdue_fallback[lang];
+    if (entry.offset === 1) return dict.learned_yesterday[lang];
+    return dict.learned_days_ago[lang].replace("{n}", String(entry.offset));
+  }
+
+  function render(dict) {
+    const root = document.getElementById("daily-reminders-root");
+    if (!root) return;
+    const lang = document.documentElement.dataset.lang === "en" ? "en" : "tr";
+    const columns = buildColumns();
+
+    const table = document.createElement("table");
+    table.className = "w-full min-w-[720px] border-collapse text-sm";
+
+    const headRow = document.createElement("tr");
+    for (const col of columns) {
+      const th = document.createElement("th");
+      th.className = "border border-border bg-bg-softer px-2 py-1 text-left align-top";
+      th.textContent = dict[col.dayKey][lang];
+      headRow.appendChild(th);
+    }
+    table.appendChild(headRow);
+
+    const bodyRow = document.createElement("tr");
+    for (const col of columns) {
+      const td = document.createElement("td");
+      td.className = "border border-border px-2 py-2 align-top";
+
+      if (col.entries.length === 0) {
+        td.innerHTML = `<span class="text-ink-faint">${dict.no_reminder[lang]}</span>`;
+        bodyRow.appendChild(td);
+        continue;
+      }
+
+      const notReminded = col.entries.filter((e) => !e.c.last_reminded);
+      const reminded = col.entries.filter((e) => e.c.last_reminded);
+
+      for (const e of notReminded) {
+        const line = document.createElement("div");
+        line.className = "mb-1";
+        const a = document.createElement("a");
+        a.href = `/concepts/${e.c.slug}/`;
+        a.textContent = pickTitle(e.c, lang);
+        line.appendChild(a);
+        line.appendChild(document.createTextNode(" — " + noteText(e, lang, dict)));
+        td.appendChild(line);
+      }
+
+      if (notReminded.length > 0 && reminded.length > 0) {
+        const hr = document.createElement("hr");
+        hr.className = "my-1 border-border";
+        td.appendChild(hr);
+      }
+
+      for (const e of reminded) {
+        const line = document.createElement("div");
+        line.className = "mb-1 opacity-50";
+        line.textContent = "✓ " + pickTitle(e.c, lang) + " — " + dict.reminded_badge[lang];
+        td.appendChild(line);
+      }
+
+      bodyRow.appendChild(td);
+    }
+    table.appendChild(bodyRow);
+
+    root.innerHTML = "";
+    root.appendChild(table);
+  }
+
+  render(dict);
+  window.addEventListener("ss-lang-change", () => render(dict));
+</script>

@@ -1,0 +1,14 @@
+---
+// Renders both language variants inline; global.css shows/hides them based
+// on the <html data-lang="..."> attribute set by the toggle script. This
+// keeps the language switch instant and JS-optional (defaults to Turkish).
+import { dict, type I18nKey } from "../lib/i18n";
+
+interface Props {
+  k: I18nKey;
+}
+const { k } = Astro.props;
+const entry = dict[k];
+---
+
+<span class="lang-tr">{entry.tr}</span><span class="lang-en" hidden>{entry.en}</span>

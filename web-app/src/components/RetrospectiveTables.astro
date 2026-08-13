@@ -1,0 +1,195 @@
+---
+import T from "./T.astro";
+
+interface ConceptRef {
+  slug: string;
+  title: string;
+  title_en: string;
+  category: string;
+  subcategory: string;
+  date_learned: string;
+  last_reminded: string;
+}
+interface Props {
+  concepts: ConceptRef[];
+}
+const { concepts } = Astro.props;
+---
+
+<section class="card mb-6">
+  <h2 class="mb-3 text-base font-semibold"><T k="weekly_retro_title" /></h2>
+  <div id="weekly-retro-root" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"></div>
+</section>
+
+<section class="card mb-6">
+  <h2 class="mb-3 text-base font-semibold"><T k="monthly_retro_title" /></h2>
+  <div id="monthly-retro-root" class="grid gap-4 sm:grid-cols-3"></div>
+</section>
+
+<script define:vars={{ concepts }}>
+  window.__ssConceptsForRetro = concepts;
+</script>
+<script>
+  import { dict } from "../lib/i18n";
+
+  const concepts = window.__ssConceptsForRetro;
+  const MAX_PER_SUBCATEGORY = 10;
+
+  function fmt(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  function addDays(d, n) {
+    const nd = new Date(d);
+    nd.setDate(nd.getDate() + n);
+    return nd;
+  }
+  function startOfIsoWeek(d) {
+    const nd = new Date(d);
+    const day = nd.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    nd.setDate(nd.getDate() + diff);
+    nd.setHours(0, 0, 0, 0);
+    return nd;
+  }
+  function weekRange(n) {
+    const start = addDays(startOfIsoWeek(new Date()), -7 * n);
+    const end = addDays(start, 6);
+    return [fmt(start), fmt(end)];
+  }
+  function monthRange(n) {
+    const today = new Date();
+    const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const start = new Date(thisMonthStart.getFullYear(), thisMonthStart.getMonth() - n, 1);
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+    return [fmt(start), fmt(end)];
+  }
+
+  function inRange(dateStr, start, end) {
+    return dateStr && dateStr >= start && dateStr <= end;
+  }
+
+  function groupByCategory(periodConcepts) {
+    const byCategory = {};
+    for (const c of periodConcepts) {
+      const cat = c.category || "—";
+      const sub = c.subcategory || "—";
+      byCategory[cat] = byCategory[cat] || {};
+      byCategory[cat][sub] = byCategory[cat][sub] || [];
+      byCategory[cat][sub].push(c);
+    }
+    return byCategory;
+  }
+
+  function conceptLine(c, lang, reminded) {
+    const div = document.createElement("div");
+    div.className = reminded ? "opacity-50 text-sm" : "text-sm";
+    if (reminded) div.appendChild(document.createTextNode("✓ "));
+    const a = document.createElement("a");
+    a.href = `/concepts/${c.slug}/`;
+    a.textContent = lang === "en" && c.title_en ? c.title_en : c.title;
+    div.appendChild(a);
+    return div;
+  }
+
+  function buildPeriodEl(periodConcepts, lang) {
+    if (periodConcepts.length === 0) {
+      const p = document.createElement("p");
+      p.className = "text-xs text-ink-faint";
+      p.textContent = dict.empty_no_concepts[lang];
+      return p;
+    }
+
+    const wrap = document.createElement("div");
+    const byCategory = groupByCategory(periodConcepts);
+
+    for (const cat of Object.keys(byCategory).sort()) {
+      const subMap = byCategory[cat];
+      const catTotal = Object.values(subMap).reduce((sum, arr) => sum + arr.length, 0);
+
+      const catDetails = document.createElement("details");
+      const catSummary = document.createElement("summary");
+      catSummary.className = "cursor-pointer text-sm font-semibold text-ink";
+      catSummary.textContent = `${cat} (${catTotal})`;
+      catDetails.appendChild(catSummary);
+
+      for (const sub of Object.keys(subMap).sort()) {
+        const list = subMap[sub].slice().sort((a, b) => (a.date_learned < b.date_learned ? 1 : -1));
+        const subDetails = document.createElement("details");
+        subDetails.className = "ml-3 mt-1";
+        const subSummary = document.createElement("summary");
+        subSummary.className = "cursor-pointer text-xs font-medium text-ink-muted";
+        subSummary.textContent = `${sub} (${list.length})`;
+        subDetails.appendChild(subSummary);
+
+        const shown = list.slice(0, MAX_PER_SUBCATEGORY);
+        const notReminded = shown.filter((c) => !c.last_reminded);
+        const reminded = shown.filter((c) => c.last_reminded);
+
+        const listWrap = document.createElement("div");
+        listWrap.className = "ml-3 mt-1 space-y-0.5";
+        for (const c of notReminded) listWrap.appendChild(conceptLine(c, lang, false));
+        if (notReminded.length > 0 && reminded.length > 0) {
+          const hr = document.createElement("hr");
+          hr.className = "my-1 border-border";
+          listWrap.appendChild(hr);
+        }
+        for (const c of reminded) listWrap.appendChild(conceptLine(c, lang, true));
+
+        if (list.length > MAX_PER_SUBCATEGORY) {
+          const more = document.createElement("p");
+          more.className = "mt-1 text-xs italic text-ink-faint";
+          more.textContent =
+            "+" +
+            (list.length - MAX_PER_SUBCATEGORY) +
+            " " +
+            dict.more_items[lang].replace("{total}", String(list.length));
+          listWrap.appendChild(more);
+        }
+
+        subDetails.appendChild(listWrap);
+        catDetails.appendChild(subDetails);
+      }
+
+      wrap.appendChild(catDetails);
+    }
+    return wrap;
+  }
+
+  function renderGrid(rootId, ranges, labelKeys, lang) {
+    const root = document.getElementById(rootId);
+    if (!root) return;
+    root.innerHTML = "";
+    ranges.forEach(([start, end], i) => {
+      const periodConcepts = concepts.filter((c) => inRange(c.date_learned, start, end));
+      const col = document.createElement("div");
+      const heading = document.createElement("p");
+      heading.className = "mb-2 text-sm font-semibold text-ink";
+      heading.textContent = `${dict[labelKeys[i]][lang]} (${periodConcepts.length})`;
+      col.appendChild(heading);
+      col.appendChild(buildPeriodEl(periodConcepts, lang));
+      root.appendChild(col);
+    });
+  }
+
+  function renderAll() {
+    const lang = document.documentElement.dataset.lang === "en" ? "en" : "tr";
+    renderGrid(
+      "weekly-retro-root",
+      [1, 2, 3, 4].map(weekRange),
+      ["last_week", "weeks_ago_2", "weeks_ago_3", "weeks_ago_4"],
+      lang
+    );
+    renderGrid(
+      "monthly-retro-root",
+      [1, 2, 3].map(monthRange),
+      ["last_month", "month_before", "month_before_that"],
+      lang
+    );
+  }
+
+  renderAll();
+  window.addEventListener("ss-lang-change", renderAll);
+</script>

@@ -1,0 +1,31 @@
+---
+// Same CSS-only toggle trick as T.astro, but for per-note titles that come
+// from content data (title / title_en) rather than the static UI dictionary.
+// Falls back to the Turkish title when title_en is empty.
+interface Props {
+  tr: string;
+  en?: string;
+  as?: "span" | "h1" | "h2";
+}
+const { tr, en, as = "span" } = Astro.props;
+const Tag = as;
+const enText = en && en.trim() !== "" ? en : tr;
+---
+
+{
+  Tag === "span" ? (
+    <>
+      <span class="lang-tr">{tr}</span>
+      <span class="lang-en" hidden>
+        {enText}
+      </span>
+    </>
+  ) : (
+    <Tag>
+      <span class="lang-tr">{tr}</span>
+      <span class="lang-en" hidden>
+        {enText}
+      </span>
+    </Tag>
+  )
+}

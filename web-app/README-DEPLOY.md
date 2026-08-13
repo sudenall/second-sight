@@ -1,0 +1,118 @@
+# Second Sight Web App — Deploy Talimatı (Cloudflare Pages)
+
+Bu doküman sadece talimat verir — henüz hiçbir deploy işlemi yapılmadı.
+Aşağıdaki adımları Cloudflare panelinden sen elle uygulayacaksın.
+
+## Genel Mimari
+
+Bu web app `second-sight` (public) reposunun `/web-app/` alt klasöründe
+yaşıyor. Build sırasında `Sessions/`, `Concepts/`, `Weekly-Summaries/`,
+`_index/` klasörlerini okuması gerekiyor — ama bunlar `second-sight-vault`
+(private) reposunda. Yerelde bu sorun yok çünkü ikisi aynı klasörü
+paylaşıyor; Cloudflare'ın build ortamında ise sadece public repo klonlanır,
+bu yüzden build script'i private repo'yu AYRICA, salt-okunur bir token ile
+klonlayıp ondan sonra `astro build`'i çalıştırıyor.
+
+```
+Cloudflare build adımları:
+1. second-sight (public) repo klonlanır  → web-app/ burada
+2. second-sight-vault (private) repo,    → vault-data/ olarak ayrıca klonlanır
+   salt-okunur bir GitHub token'ıyla
+3. VAULT_DATA_DIR=vault-data ile astro build çalıştırılır
+4. web-app/dist/ statik çıktısı Cloudflare Pages'e yüklenir
+```
+
+## 1. Salt-Okunur GitHub Token Oluştur (private repo'yu klonlamak için)
+
+1. GitHub → sağ üst profil ikonu → **Settings**.
+2. Sol menüde en altta **Developer settings**.
+3. **Personal access tokens → Fine-grained tokens → Generate new token**.
+4. **Resource owner**: `sudenall` (senin hesabın).
+5. **Repository access**: "Only select repositories" seç, sadece
+   `second-sight-vault`'ı işaretle.
+6. **Permissions → Repository permissions → Contents**: **Read-only**
+   seç. Başka hiçbir izin gerekmiyor.
+7. **Expiration**: bir tarih seç (örn. 1 yıl) — GitHub fine-grained
+   token'lar süresiz olamıyor, süre dolunca yeni token üretip Cloudflare'da
+   güncellemen gerekecek.
+8. **Generate token** → gösterilen token'ı hemen kopyala (bir daha
+   gösterilmiyor). Bunu bir sonraki adımda kullanacaksın.
+
+## 2. Cloudflare Pages Projesi Oluştur
+
+1. [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages**
+   → **Create** → **Pages** → **Connect to Git**.
+2. GitHub hesabını bağla (istenirse), **second-sight** reposunu seç.
+3. **Production branch**: `main`.
+4. **Framework preset**: "None" bırak (custom build komutu kullanacağız).
+5. **Root directory (Advanced)**: boş bırak / `/` (repo kökü) — build
+   komutu zaten `web-app/` alt klasörüne kendisi giriyor.
+6. **Build command** alanına aşağıdakini birebir yapıştır:
+   ```
+   git clone --depth 1 https://x-access-token:$VAULT_REPO_TOKEN@github.com/sudenall/second-sight-vault.git vault-data && cd web-app && npm install && VAULT_DATA_DIR=$(pwd)/../vault-data npm run build
+   ```
+7. **Build output directory**: `web-app/dist`
+8. **Environment variables (before deploying)** bölümünü aç, iki değişken
+   ekle:
+   - `VAULT_REPO_TOKEN` = (1. adımda kopyaladığın token) → sağdaki kalem/
+     göz simgesinden **Encrypt** işaretle (bu, secret alanı yapar, panelde
+     bir daha düz metin görünmez).
+   - `NODE_VERSION` = `22` (Astro 5 için güncel bir Node sürümü garanti
+     eder; Cloudflare'ın varsayılanı farklı olabilir).
+9. **Save and Deploy**.
+
+İlk build birkaç dakika sürebilir. Bittiğinde Cloudflare sana
+`second-sight.pages.dev` gibi (proje adına göre değişen) bir link verecek
+— **bu adımdan sonra site herkese açık olur, o yüzden bir sonraki adımı
+(Cloudflare Access) atlamadan tamamla.**
+
+## 3. Cloudflare Access ile E-posta Tabanlı Kimlik Doğrulama
+
+Bu adım, siteyi (kod public olsa da) sadece senin e-postanla giriş
+yapabilen bir sayfaya çevirir — şifre değil, tek kullanımlık kod (OTP)
+e-postana gelir.
+
+1. Cloudflare panelinde sol menüden **Zero Trust** (ya da doğrudan
+   [one.dash.cloudflare.com](https://one.dash.cloudflare.com)) sekmesine
+   git. İlk kez giriyorsan ücretsiz plan seçimini onaylaman istenebilir
+   (50 kullanıcıya kadar ücretsiz, senin için yeterli).
+2. Sol menüde **Access → Applications → Add an application**.
+3. **Application type**: **Self-hosted** seç.
+4. **Application name**: `Second Sight`.
+5. **Application domain**: Cloudflare Pages projenin adresini gir (örn.
+   `second-sight.pages.dev` — 2. adımdaki deploy sonunda aldığın domain).
+6. **Session duration**: tercihine göre (örn. `24 hours` ya da `7 days`).
+7. **Add policy** (bir sonraki ekranda):
+   - **Policy name**: `Sadece ben`.
+   - **Action**: `Allow`.
+   - **Include** kuralı: **Emails** seç, `irlandasude@gmail.com` yaz.
+8. **Save**.
+
+Bundan sonra siteye giren herkes önce Cloudflare'ın giriş sayfasını
+görecek, e-posta adresini girecek, e-postasına gelen kodu girecek — sadece
+yukarıda izin verdiğin adres içeri girebilecek.
+
+## 4. Doğrulama
+
+- Deploy tamamlandıktan ve Access kurulduktan sonra, siteye
+  (gizli sekmede/farklı bir tarayıcıda) git, e-posta ile giriş yapmayı
+  dene, ana sayfanın Obsidian'daki Home.md ile aynı bilgiyi gösterdiğini
+  kontrol et.
+- İçerik güncellemesi (yeni sohbet işlendiğinde) otomatik yayınlanmaz —
+  Cloudflare Pages sadece **public repo'ya push geldiğinde** yeniden build
+  alır. `sync.ps1` her çalıştığında public repo değişmiyorsa (genelde
+  değişmez, çünkü gerçek notlar private repo'da) yeni build TETİKLENMEZ.
+  Bunu nasıl otomatikleştireceğimiz (örn. Cloudflare'ın "Deploy Hook"
+  URL'sini `sync.ps1`'in sonuna eklemek) ayrı bir adım — deploy onaylandıktan
+  sonra konuşuruz.
+
+## Yerel Geliştirme (hatırlatma)
+
+```powershell
+cd web-app
+npm install
+npm run dev
+```
+
+`http://localhost:4321` — yerelde `VAULT_DATA_DIR` ayarlamana gerek yok,
+web-app'in bir üst klasörü zaten vault'un kendisi.

@@ -1,0 +1,85 @@
+---
+import { getCollection } from "astro:content";
+import Layout from "../../components/Layout.astro";
+import T from "../../components/T.astro";
+import NoteTitle from "../../components/NoteTitle.astro";
+import { slugify } from "../../lib/slug";
+
+export async function getStaticPaths() {
+  const allConcepts = await getCollection("concepts");
+  const categories = Array.from(new Set(allConcepts.map((c) => c.data.category)));
+  return categories.map((category) => ({
+    params: { category: slugify(category) },
+    props: { categoryName: category },
+  }));
+}
+
+const { categoryName } = Astro.props;
+const allConcepts = await getCollection("concepts");
+const inCategory = allConcepts.filter((c) => c.data.category === categoryName);
+
+const bySubcategory = new Map<string, typeof inCategory>();
+for (const c of inCategory) {
+  const key = c.data.subcategory || "—";
+  if (!bySubcategory.has(key)) bySubcategory.set(key, []);
+  bySubcategory.get(key)!.push(c);
+}
+const subcategories = Array.from(bySubcategory.keys()).sort();
+---
+
+<Layout title={categoryName}>
+  <p class="mb-4 text-sm">
+    <a href="/">&larr; <T k="back_to_home" /></a>
+  </p>
+  <h1 class="mb-6 text-2xl font-bold">{categoryName}</h1>
+
+  {
+    subcategories.map((sub) => {
+      const items = bySubcategory
+        .get(sub)!
+        .slice()
+        .sort((a, b) => (a.data.date_learned < b.data.date_learned ? 1 : -1));
+      return (
+        <section class="mb-8">
+          <h2 class="mb-3 border-b border-border pb-1 text-lg font-semibold">
+            {sub} <span class="text-sm font-normal text-ink-faint">({items.length})</span>
+          </h2>
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[480px] border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th class="border border-border bg-bg-softer px-2 py-1 text-left">
+                    <T k="concept_label" />
+                  </th>
+                  <th class="border border-border bg-bg-softer px-2 py-1 text-left">
+                    <T k="difficulty_label" />
+                  </th>
+                  <th class="border border-border bg-bg-softer px-2 py-1 text-left">
+                    <T k="learned_on_label" />
+                  </th>
+                  <th class="border border-border bg-bg-softer px-2 py-1 text-left">
+                    <T k="status_label" />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((c) => (
+                  <tr>
+                    <td class="border border-border px-2 py-1">
+                      <a href={`/concepts/${c.id}/`}>
+                        <NoteTitle tr={c.data.title} en={c.data.title_en} />
+                      </a>
+                    </td>
+                    <td class="border border-border px-2 py-1">{c.data.difficulty || "—"}</td>
+                    <td class="border border-border px-2 py-1">{c.data.date_learned || "—"}</td>
+                    <td class="border border-border px-2 py-1">{c.data.status || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      );
+    })
+  }
+</Layout>

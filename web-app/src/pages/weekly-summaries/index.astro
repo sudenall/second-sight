@@ -1,0 +1,43 @@
+---
+import { getCollection } from "astro:content";
+import Layout from "../../components/Layout.astro";
+import T from "../../components/T.astro";
+
+const summaries = (await getCollection("weeklySummaries")).sort((a, b) =>
+  (b.data.week || "").localeCompare(a.data.week || "")
+);
+
+const byCategory = new Map<string, typeof summaries>();
+for (const s of summaries) {
+  const key = s.data.category || "—";
+  if (!byCategory.has(key)) byCategory.set(key, []);
+  byCategory.get(key)!.push(s);
+}
+---
+
+<Layout title="Haftalık Raporlar">
+  <h1 class="mb-2 text-2xl font-bold"><T k="nav_weekly_reports" /></h1>
+  <p class="mb-6 text-sm text-ink-muted"><T k="weekly_reports_intro" /></p>
+
+  {
+    summaries.length === 0 ? (
+      <p class="card text-sm text-ink-faint">
+        <T k="weekly_reports_empty" />
+      </p>
+    ) : (
+      Array.from(byCategory.entries()).map(([cat, items]) => (
+        <section class="mb-8">
+          <h2 class="mb-3 border-b border-border pb-1 text-lg font-semibold">{cat}</h2>
+          <ul class="space-y-2">
+            {items.map((s) => (
+              <li class="card">
+                <p class="font-medium">{s.data.week}</p>
+                {s.data.subcategory && <p class="text-xs text-ink-faint">{s.data.subcategory}</p>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))
+    )
+  }
+</Layout>

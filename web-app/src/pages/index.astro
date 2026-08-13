@@ -1,0 +1,58 @@
+---
+import { getCollection } from "astro:content";
+import Layout from "../components/Layout.astro";
+import DailyReminders from "../components/DailyReminders.astro";
+import RetrospectiveTables from "../components/RetrospectiveTables.astro";
+import T from "../components/T.astro";
+import { slugify } from "../lib/slug";
+
+const allConcepts = await getCollection("concepts");
+
+const reminderConcepts = allConcepts
+  .filter((c) => c.data.date_learned)
+  .map((c) => ({
+    slug: c.id,
+    title: c.data.title,
+    title_en: c.data.title_en,
+    date_learned: c.data.date_learned,
+    review_due: c.data.review_due,
+    last_reminded: c.data.last_reminded,
+  }));
+
+const retroConcepts = allConcepts
+  .filter((c) => c.data.date_learned)
+  .map((c) => ({
+    slug: c.id,
+    title: c.data.title,
+    title_en: c.data.title_en,
+    category: c.data.category,
+    subcategory: c.data.subcategory,
+    date_learned: c.data.date_learned,
+    last_reminded: c.data.last_reminded,
+  }));
+
+const categories = Array.from(new Set(allConcepts.map((c) => c.data.category))).sort();
+---
+
+<Layout title="Ana Sayfa">
+  <DailyReminders concepts={reminderConcepts} />
+  <RetrospectiveTables concepts={retroConcepts} />
+
+  <section class="card">
+    <h2 class="mb-3 text-base font-semibold"><T k="categories_title" /></h2>
+    <ul class="flex flex-wrap gap-2">
+      {
+        categories.map((cat) => (
+          <li>
+            <a
+              href={`/categories/${slugify(cat)}/`}
+              class="badge border border-border bg-bg-softer text-ink no-underline hover:border-accent hover:text-accent"
+            >
+              {cat}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</Layout>

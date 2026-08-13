@@ -23,7 +23,8 @@ $publicPaths = @(
     "SCHEDULING.md",
     "SCHEDULING\katman-c-prompt.txt",
     "sync.ps1",
-    ".gitignore"
+    ".gitignore",
+    "web-app"
 )
 
 $privatePaths = @(
