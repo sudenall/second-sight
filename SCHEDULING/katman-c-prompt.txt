@@ -9,3 +9,12 @@ sync.ps1'i "Katman C: otomatik haftalık işleme - [tarih]" mesajıyla
 çalıştır. Hiçbir adımda kullanıcı onayı bekleme, tüm kararları kendin ver,
 sonunda kısa bir özet raporu SCHEDULING/son-calisma-raporu.md dosyasına
 yaz.
+
+ÜSLUP KURALI: Her concept/session notu alanı (Kavram Nedir, Ne Sordum,
+Nerede Zorlandım, Netleşen Sonuç, Oturum Özeti), birbirine kopuk
+fragmanlar değil, akıcı, öğretici bir anlatımla yazılmalı. Bir öğretmenin
+konuyu sırayla, geçiş cümleleriyle bağlayarak anlattığı gibi yaz - "bu
+demek ki...", "buradan çıkan sonuç...", "bunun sebebi..." gibi
+bağlayıcılar kullan. Kavramı önce genel çerçevesiyle tanıt, sonra detaya
+in. Liste/madde işaretlerini SADECE gerçekten ayrık, sıralı öğeler için
+kullan, düşünce akışını madde madde parçalama.
