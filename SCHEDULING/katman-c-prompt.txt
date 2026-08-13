@@ -1,0 +1,11 @@
+_staging/ klasöründeki tüm dosyaları Katman C'ye göre işle: kategorize et
+(mevcut _index/categories.json'a göre, yeni kategori gerekiyorsa mantıklı
+bir varsayım yap, agresif olmayan bir isim seç), ilişkilendir (mevcut
+concept'lerle kopya kontrolü yaparak - Türkçe/İngilizce karışık isimlerde
+de anlamsal eşleşme ara), her biri için session + concept notlarını üret,
+last_reminded alanını boş bırak, _manifest.json'da last_processed
+alanlarını güncelle, işlenen staging dosyalarını sil. İşlem bitince
+sync.ps1'i "Katman C: otomatik haftalık işleme - [tarih]" mesajıyla
+çalıştır. Hiçbir adımda kullanıcı onayı bekleme, tüm kararları kendin ver,
+sonunda kısa bir özet raporu SCHEDULING/son-calisma-raporu.md dosyasına
+yaz.

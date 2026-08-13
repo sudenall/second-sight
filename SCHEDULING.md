@@ -30,10 +30,10 @@ modda çalıştırarak Katman C'yi otomatik tetikleyebilirsin:
 5. Eylem: **Bir program başlat**.
 6. Program/script: `claude` (veya `claude.exe`'nin tam yolu, `where claude`
    ile bulunabilir).
-7. Argümanlar (örnek):
-   ```
-   -p "D:\Vaults For Obsidian\second-brain-for-sude\_staging klasöründeki tüm dosyaları, projenin Katman C kurallarına göre işle: kategorize et, ilişkilendir, Session+Concept notları üret, manifest ve index dosyalarını güncelle, işlenen staging dosyalarını sil."
-   ```
+7. Argümanlar: `SCHEDULING\katman-c-prompt.txt` dosyasının içeriğini aç,
+   kopyala, `-p "..."` içine yapıştır (tırnak işaretlerini kaçırmayı
+   unutma). Bu dosya, prompt'un tek kaynağı — değiştirmek istersen sadece
+   orayı güncelle, buradaki talimat hep aynı kalır.
 8. Başlangıç dizini (Start in): `D:\Vaults For Obsidian\second-brain-for-sude`
 9. Kaydet.
 

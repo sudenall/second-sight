@@ -21,6 +21,7 @@ $publicPaths = @(
     "Reminders\Home.md",
     "README.md",
     "SCHEDULING.md",
+    "SCHEDULING\katman-c-prompt.txt",
     "sync.ps1",
     ".gitignore"
 )
@@ -33,6 +34,7 @@ $privatePaths = @(
     "_manifest.json",
     "_index",
     "_ogrenme-tercihlerim.md",
+    "SCHEDULING\son-calisma-raporu.md",
     ".gitignore"
 )
 
