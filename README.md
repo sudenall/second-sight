@@ -2,133 +2,141 @@
 
 *A second brain that remembers what you forgot to review.*
 
-Claude.ai'de pinlenmiş sohbetlerden öğrenilen bilgileri, kategorize edilmiş ve
-ilişkisel bir Obsidian bilgi tabanına (ve ileride bir web arayüzüne) dönüştüren
-kişisel "second brain" sistemi.
+A personal "second brain" system that turns knowledge learned from pinned
+chats on claude.ai into a categorized, relational Obsidian knowledge base
+(and eventually a web interface).
 
-> Bu repo **sadece altyapıyı** içerir: şablonlar, dashboard script'i, senkron
-> aracı ve dokümantasyon. Gerçek not içeriği (Sessions/, Concepts/,
-> Weekly-Summaries/, `_staging/`, `_manifest.json`, `_index/`) kasıtlı olarak
-> burada değil — ayrı bir **private** repoda tutulur. Detay için
-> [Repo ayrımı](#repo-ayrımı-publicprivate) bölümüne bakın.
+> This repo contains **infrastructure only**: templates, the dashboard
+> script, the sync tool, and documentation. The actual note content
+> (Sessions/, Concepts/, Weekly-Summaries/, `_staging/`, `_manifest.json`,
+> `_index/`) is intentionally not here — it lives in a separate **private**
+> repo. See the [Public/private repo split](#publicprivate-repo-split)
+> section for details.
 
-## Çözülen problem
+## Problem it solves
 
-Claude.ai'deki sohbetlerde zamanla çok fazla şey öğreniliyor, ama bu bilgi
-sohbet geçmişinde gömülü kalıyor. Bir şeyi tekrar hatırlamak/uygulamak
-gerektiğinde eski sohbetlere dönüp arama yapmak gerekiyor — bu hem yavaş hem
-de öğrenilen bilginin birbirine bağlanmasını (ilişkisel bir bilgi ağı olarak
-büyümesini) engelliyor. Second Sight bu bilgiyi sohbetten çıkarıp, atomik ve
-birbirine bağlı notlara dönüştürerek kalıcı, aranabilir, tekrar edilebilir bir
-sisteme taşıyor.
+A lot gets learned over time in claude.ai conversations, but that knowledge
+stays buried in chat history. Recalling or applying something later means
+digging back through old chats — slow, and it also prevents learned
+knowledge from connecting to other knowledge (growing into a relational
+network). Second Sight extracts this knowledge from conversations and turns
+it into atomic, interlinked notes, moving it into a permanent, searchable,
+reviewable system.
 
-## Mimari
+## Architecture
 
 ```
-claude.ai pinli sohbetler
-        │  (Claude Cowork - manuel/tarayıcı üzerinden)
+pinned claude.ai chats
+        │  (Claude Cowork - manual/browser-driven)
         ▼
-   Katman A: Manifest karşılaştırması
-   (başlık + son değişiklik → sadece FARKLI olanlar ilerler)
+   Layer A: Manifest comparison
+   (title + last-modified → only CHANGED chats proceed)
         ▼
-   Katman B: Ham çıkarma → _staging/*.md
-   (kategorize etmeden, hiçbir öğrenme birimi atlanmadan)
+   Layer B: Raw extraction → _staging/*.md
+   (no categorization yet, no learning unit skipped)
         │  (Claude Code)
         ▼
-   Katman C: Kategorize + ilişkilendirme
-   (_index/*.json ile hızlı eşleştirme, Session+Concept notu üretimi,
-    manifest/index güncelleme, _staging dosyasını silme)
+   Layer C: Categorize + relate
+   (fast matching via _index/*.json, generates Session+Concept notes,
+    updates manifest/index, deletes the staging file)
         ▼
-   Katman D: Dashboard (Reminders/Home.md)
-   (Dataview/DataviewJS, tamamen yerel, AI çağrısı yok)
+   Layer D: Dashboard (Reminders/Home.md)
+   (Dataview/DataviewJS, fully local, no AI calls)
 ```
 
-### Katman A — Manifest kontrolü
+### Layer A — Manifest check
 
-Sohbetin tam içeriği açılmadan önce sadece başlık + son değişiklik bilgisi
-`_manifest.json`'daki `last_seen_modified` ile karşılaştırılır. Eşleşiyorsa o
-sohbet tamamen atlanır. Bu, her çalıştırmada bütün sohbetlerin yeniden
-işlenmesini (ve gereksiz AI/işlem maliyetini) önler.
+Before a chat's full content is opened, only its title and last-modified
+info are compared against `last_seen_modified` in `_manifest.json`. If they
+match, the chat is skipped entirely. This prevents every run from
+reprocessing all chats (and the unnecessary AI/compute cost that would
+entail).
 
-### Katman B — Ham çıkarma
+### Layer B — Raw extraction
 
-Sadece fark bulunan sohbetlerin içeriği açılır ve karar/analiz yapılmadan
-`_staging/` klasörüne ham metin olarak yazılır. Format detayı için
-[`_staging/README.md`](_staging/README.md).
+Only chats where a difference was found have their content opened, and it's
+written to the `_staging/` folder as raw text without any
+decision-making/analysis. See [`_staging/README.md`](_staging/README.md)
+for the format details.
 
-### Katman C — Kategorize + ilişkilendirme
+### Layer C — Categorize + relate
 
-`_staging/`'deki her dosya için önce `_index/categories.json` ve
-`_index/tags.json`'a bakılır (tüm vault taranmaz), mevcut notlarla eşleşme
-varsa `related` alanları iki yönlü bağlanır. Session + Concept notları
-üretilir, `review_due = date_learned + 3 gün` hesaplanır. İşlem bitince
-manifest/index güncellenir, işlenen `_staging` dosyası silinir.
+For each file in `_staging/`, `_index/categories.json` and
+`_index/tags.json` are checked first (the whole vault isn't scanned); if a
+match with an existing note is found, `related` fields are linked
+bidirectionally. Session + Concept notes are generated, and
+`review_due = date_learned + 3 days` is calculated. Once done, the
+manifest/index is updated and the processed `_staging` file is deleted.
 
-**Kategori iki katmanlı**: `category` (geniş üst başlık, örn. "AI Certified
-Architect") ve `subcategory` (o üst başlık altında daha spesifik, örn.
-"Claude Developer Platform"). İkisi de esnek büyüyen bir taksonomi —
-`_index/categories.json`'da her `category` kendi `subcategories` listesini
-taşır. Mevcut olanlardan uygun yoksa (kategori ya da alt kategori fark etmez)
-yeni eklemeden önce onay istenir.
+**Two-tier categorization**: `category` (a broad top-level heading, e.g.
+"AI Certified Architect") and `subcategory` (more specific, under that
+top-level heading, e.g. "Claude Developer Platform"). Both form a flexible,
+growing taxonomy — in `_index/categories.json`, each `category` carries its
+own `subcategories` list. If none of the existing ones fit (whether
+category or subcategory), approval is requested before adding a new one.
 
-Eksiksizlik kuralı: bir sohbette geçen HER ayrı öğrenme birimi (kavram,
-teknik/yöntem, mimari karar, sorun, çözüm, düzelen yanlış anlama,
-karşılaştırma/trade-off) ayrı bir concept notu adayıdır. Önemsiz görünse bile
-atlanmaz; en fazla küçük/bağlantılı iki alt-kavram tek notta birleştirilir.
+Completeness rule: every distinct learning unit that appears in a chat
+(concept, technique/method, architectural decision, problem, solution,
+corrected misunderstanding, comparison/trade-off) is a candidate for its
+own concept note. Nothing is skipped just because it seems minor; at most
+two small, closely related sub-concepts may be merged into a single note.
 
-### Katman D — Dashboard
+### Layer D — Dashboard
 
-`Reminders/Home.md`, kategori bazlı tablolar ve haftalık hatırlatma
-tablosunu Dataview/DataviewJS ile hesaplar. Bir kere kurulur, sonrası her
-Obsidian açılışında otomatik ve ücretsiz çalışır.
+`Reminders/Home.md` computes category-based tables and the weekly reminder
+table using Dataview/DataviewJS. Set up once, it then runs automatically
+and for free every time Obsidian opens.
 
-## Maliyet-verimlilik yaklaşımı
+## Cost-efficiency approach
 
-- **Manifest**: değişmeyen sohbetler hiç açılmaz.
-- **Staging**: ham çıkarma ve kategorize/ilişkilendirme ayrı adımlar — biri
-  diğerini tekrar tetiklemez.
-- **Index (categories.json / tags.json)**: ilişkilendirme için tüm vault
-  yerine küçük index dosyaları taranır.
-- **Dashboard**: AI çağrısı gerektirmeyen, tamamen yerel Dataview/DataviewJS.
+- **Manifest**: unchanged chats are never opened at all.
+- **Staging**: raw extraction and categorize/relate are separate steps —
+  neither retriggers the other.
+- **Index (categories.json / tags.json)**: relating notes scans small index
+  files instead of the whole vault.
+- **Dashboard**: fully local Dataview/DataviewJS, no AI calls required.
 
-## Repo ayrımı (public/private)
+## Public/private repo split
 
-Aynı vault klasörü, **iki bağımsız git deposu** tarafından izlenir
-(`git --git-dir` tekniği, aynı klasörde iki ayrı `.git` dizini):
+The same vault folder is tracked by **two independent git repos**
+(the `git --git-dir` technique, two separate `.git` directories in the same
+folder):
 
-| Repo | Git dizini | İçerik | Görünürlük |
+| Repo | Git directory | Content | Visibility |
 |---|---|---|---|
-| `second-sight` (bu repo) | `.git-public` | `_templates/`, `Reminders/Home.md`, `README.md`, `SCHEDULING.md`, `sync.ps1`, `.gitignore` | Public |
+| `second-sight` (this repo) | `.git-public` | `_templates/`, `Reminders/Home.md`, `README.md`, `SCHEDULING.md`, `sync.ps1`, `.gitignore` | Public |
 | `second-sight-vault` | `.git-private` | `Sessions/`, `Concepts/`, `Weekly-Summaries/`, `_staging/`, `_manifest.json`, `_index/` | Private |
 
-Vault klasör yapısı tam olarak spesifikasyondaki gibi tek parça kalır; sadece
-git tarafında iki ayrı geçmiş tutulur.
+The vault's folder structure stays exactly as specified, as one single
+tree; only the git side keeps two separate histories.
 
-### Senkronizasyon
+### Synchronization
 
-Obsidian'da normal şekilde not oluşturup/düzenledikten sonra tek komut:
+After creating/editing notes in Obsidian as usual, a single command:
 
 ```powershell
 powershell -File sync.ps1
 ```
 
-Bu script her iki repoyu da kendi dosya listesiyle stage eder, değişiklik
-varsa commit + push eder. Hangi repoya hangi dosyanın gittiğini düşünmene
-gerek yok — script bunu `publicPaths` / `privatePaths` listeleriyle otomatik
-ayırıyor. Tam otomatik (zamanlanmış) çalıştırma için bkz. [`SCHEDULING.md`](SCHEDULING.md).
+This script stages both repos with their own file list and commits + pushes
+if there are changes. You don't need to think about which file goes to
+which repo — the script handles that automatically via the `publicPaths` /
+`privatePaths` lists. For fully automatic (scheduled) runs, see
+[`SCHEDULING.md`](SCHEDULING.md).
 
-## Kullanılan araçlar
+## Tools used
 
-- **Obsidian** — vault, Dataview ve Templater eklentileri (zaten kurulu)
-- **Claude Cowork** — pinli sohbet tarama (Katman A/B), claude.ai hesabı
-  üzerinden manuel tetiklenir
-- **Claude Code** — kategorize/ilişkilendirme (Katman C), staging dosyalarını
-  işler
-- **Git / GitHub** — iki bağımsız repo (public altyapı, private vault)
-- **PowerShell** — `sync.ps1` ile senkron
+- **Obsidian** — the vault, with the Dataview and Templater plugins
+  (already installed)
+- **Claude Cowork** — pinned chat scanning (Layer A/B), triggered manually
+  via the claude.ai account
+- **Claude Code** — categorize/relate (Layer C), processes staging files
+- **Git / GitHub** — two independent repos (public infrastructure, private
+  vault)
+- **PowerShell** — sync via `sync.ps1`
 
-## Durum
+## Status
 
-Klasör yapısı, şablonlar, index/manifest iskeletleri ve dashboard kuruldu.
-Web arayüzü aşaması henüz başlamadı — önce kurgusal örnek veriyle Katman C
-test ediliyor.
+The folder structure, templates, index/manifest skeletons, and dashboard
+are set up. The web interface phase hasn't started yet — Layer C is
+currently being tested with fictional sample data.

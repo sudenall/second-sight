@@ -18,3 +18,8 @@ demek ki...", "buradan çıkan sonuç...", "bunun sebebi..." gibi
 bağlayıcılar kullan. Kavramı önce genel çerçevesiyle tanıt, sonra detaya
 in. Liste/madde işaretlerini SADECE gerçekten ayrık, sıralı öğeler için
 kullan, düşünce akışını madde madde parçalama.
+
+COMMIT DİLİ KURALI: Bundan sonra sync.ps1 çağrılırken kullanılan tüm commit
+mesajları İNGİLİZCE yazılmalı, Türkçe değil. Bu kural hem Claude Code
+CLI'nin elle çalıştırdığı commit'ler hem de Cowork routine'in otomatik
+tetiklediği commit'ler için geçerli.
