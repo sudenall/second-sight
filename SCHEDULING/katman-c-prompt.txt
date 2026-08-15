@@ -44,16 +44,21 @@ başlık (## [Tarih] — [Kısa Etiket]) olarak eklenir. Örnek:
 ## 15 Ağustos — Erişimi Sınırlamak (Slack Örneği)
 (yeni girdi...)
 
-Frontmatter'da entries adında bir liste tutulur, her girdi için:
+Frontmatter'da entries adında bir liste tutulur, her girdi için. DİKKAT:
+`anchor` alanı URL-stili tireli bir slug DEĞİLDİR - Obsidian'ın
+[[Not#Başlık]] link söz dizimi başlığın BİREBİR METNİNİ kullanır, slug
+kullanmaz. Bu yüzden `anchor`, o girdinin "## [Tarih] — [Kısa Etiket]"
+başlığının `##` sonrası birebir aynısı olmalı (boşluk, em dash, virgül
+dahil, hiç değiştirmeden):
 entries:
   - date: 2026-08-01
     label: "MCP Nedir, Temel Mekanizma"
-    anchor: "#1-agustos-mcp-nedir-temel-mekanizma"
+    anchor: "1 Ağustos — MCP Nedir, Temel Mekanizma"
     review_due: 2026-08-04
     last_reminded: ""
   - date: 2026-08-15
     label: "Erişimi Sınırlamak (Slack Örneği)"
-    anchor: "#15-agustos-erisimi-sinirlamak-slack-ornegi"
+    anchor: "15 Ağustos — Erişimi Sınırlamak (Slack Örneği)"
     review_due: 2026-08-18
     last_reminded: ""
 
