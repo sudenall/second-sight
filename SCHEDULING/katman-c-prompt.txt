@@ -1,14 +1,17 @@
 _staging/ klasöründeki tüm dosyaları Katman C'ye göre işle: kategorize et
 (mevcut _index/categories.json'a göre, yeni kategori gerekiyorsa mantıklı
-bir varsayım yap, agresif olmayan bir isim seç), ilişkilendir (mevcut
-concept'lerle kopya kontrolü yaparak - Türkçe/İngilizce karışık isimlerde
-de anlamsal eşleşme ara), her biri için session + concept notlarını üret,
-last_reminded alanını boş bırak, _manifest.json'da last_processed
-alanlarını güncelle, işlenen staging dosyalarını sil. İşlem bitince
-sync.ps1'i "Katman C: otomatik haftalık işleme - [tarih]" mesajıyla
-çalıştır. Hiçbir adımda kullanıcı onayı bekleme, tüm kararları kendin ver,
-sonunda kısa bir özet raporu SCHEDULING/son-calisma-raporu.md dosyasına
-yaz.
+bir varsayım yap, agresif olmayan bir isim seç), her sohbet için önce
+_index/topics.json'a bak (Türkçe/İngilizce karışık isimlerde de anlamsal
+eşleşme ara) - eşleşen bir konu notu varsa NOT YAPISI KURALI'na (v2) göre
+notun İÇİNE yeni tarihli bir girdi ekle, eşleşme yoksa NOT YAPISI
+KURALI'na (v2) göre yeni bir konu notu oluştur ve topics.json'a kaydet.
+Ayrı session notu üretilmez - tüm bilgi konu notunun içindeki girdilerde
+tutulur. Yeni girdinin last_reminded alanını boş bırak, _manifest.json'da
+last_processed alanlarını güncelle, işlenen staging dosyalarını sil.
+İşlem bitince sync.ps1'i "Layer C: automated weekly processing -
+[date]" mesajıyla çalıştır. Hiçbir adımda kullanıcı onayı bekleme, tüm
+kararları kendin ver, sonunda kısa bir özet raporu
+SCHEDULING/son-calisma-raporu.md dosyasına yaz.
 
 ÜSLUP KURALI: Her concept/session notu alanı (Kavram Nedir, Ne Sordum,
 Nerede Zorlandım, Netleşen Sonuç, Oturum Özeti), birbirine kopuk
@@ -23,3 +26,60 @@ COMMIT DİLİ KURALI: Bundan sonra sync.ps1 çağrılırken kullanılan tüm com
 mesajları İNGİLİZCE yazılmalı, Türkçe değil. Bu kural hem Claude Code
 CLI'nin elle çalıştırdığı commit'ler hem de Cowork routine'in otomatik
 tetiklediği commit'ler için geçerli.
+
+NOT YAPISI KURALI (v2 - Konu Notu + Tarihli Girdiler):
+
+Birim artık tekil kavram değil, KONU. Bir pinli sohbetten genellikle TEK
+BİR konu notu çıkar (örn. "MCP.md", "Cache-Stampede.md"). Sadece sohbet
+gerçekten birbirinden kopuk, ilişkisiz 2-3 ayrı konuyu kapsıyorsa birden
+fazla nota böl.
+
+KONU NOTU İÇİNDE TARİHLİ GİRDİLER: Her yeni oturumda/sohbette o konuya
+dair öğrenilen bilgi, notun İÇİNE, kendi tarihini taşıyan ayrı bir
+başlık (## [Tarih] — [Kısa Etiket]) olarak eklenir. Örnek:
+
+## 1 Ağustos — MCP Nedir, Temel Mekanizma
+(akıcı anlatım...)
+
+## 15 Ağustos — Erişimi Sınırlamak (Slack Örneği)
+(yeni girdi...)
+
+Frontmatter'da entries adında bir liste tutulur, her girdi için:
+entries:
+  - date: 2026-08-01
+    label: "MCP Nedir, Temel Mekanizma"
+    anchor: "#1-agustos-mcp-nedir-temel-mekanizma"
+    review_due: 2026-08-04
+    last_reminded: ""
+  - date: 2026-08-15
+    label: "Erişimi Sınırlamak (Slack Örneği)"
+    anchor: "#15-agustos-erisimi-sinirlamak-slack-ornegi"
+    review_due: 2026-08-18
+    last_reminded: ""
+
+SABİT ŞABLON YOK. Her girdi, kendi konusunun doğal akışına göre serbestçe
+yapılanır. Şu kutular GEREKTİĞİNDE kullanılabilir, HER GİRDİDE ZORUNLU
+DEĞİL, sadece gerçekten anlamlıysa kullan:
+- 🔑 Senin Takıldığın Nokta
+- 📝 Pratikte/Sınavda Nasıl Çıkar
+- ✅ Tek Cümle Özet
+
+TERİMLER İNGİLİZCE KALIR, anlatım Türkçe - doğal cümle içine gömülü.
+TUTARLILIK: bir terim notun içinde ilk kez İngilizce tanıtıldıysa, notun
+HER YERİNDE İngilizce kalır.
+
+SORU-CEVAP YOLCULUĞU KORUNUR: hangi soru soruldu, ilk anlatım yetmediyse
+hangi ikinci/üçüncü anlatımla netleşti.
+
+ÜSLUP TUTARLILIĞI: Yeni girdi yazmadan önce, aynı notun (varsa) önceki
+girdilerini ve/veya vault'taki 1-2 örnek notu oku, aynı ses/tonu koru.
+
+MEVCUT NOTU BULMA/GÜNCELLEME KURALI: Vault kökünde _index/topics.json
+tutulur - {"konu-anahtari": "Notes/dosya-adi.md"}. Yeni sohbet işlenirken
+ÖNCE bu indekse bakılır. Eşleşme varsa notun İÇİNE yeni girdi eklenir
+(yeni not açılmaz). Eşleşme yoksa yeni not + yeni indeks kaydı
+oluşturulur.
+
+DOSYA SONUNDA AYRI İNGİLİZCE ÇEVİRİ: Tüm gövdenin (tüm girdilerin) ayrı,
+tam İngilizce çevirisi, dosya sonuna "---\n## English Version" ayracıyla
+eklenir - gelecekteki web TR/EN toggle için.
