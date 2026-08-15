@@ -60,18 +60,22 @@ for (const cat of Array.from(categories).sort()) {
 
 ## Bu Haftanın Hatırlatmaları
 
-Her gün için sırayla kontrol edilir: tam 3 gün önce öğrenilmiş bir kavram var
-mı → yoksa 2 gün önce → yoksa dün → hiçbiri yoksa `review_due` tarihi o günden
-önce olan en eski kavram gösterilir. Bir kavram, bu 3 günlük pencere içinde
-(hangi gün önce yakalarsa) **sadece bir kez** gösterilir; aynı render içinde
-başka bir gün sütununda tekrar çıkmaz.
+**v2 (girdi-bazlı):** Artık NOT değil, GİRDİ (entry) bazlı çalışır —
+`Notes/` klasöründeki her konu notunun frontmatter'ındaki `entries`
+listesi taranır, her girdi bağımsız bir birim olarak işlenir. Her gün
+için sırayla kontrol edilir: tam 3 gün önce öğrenilmiş bir girdi var mı →
+yoksa 2 gün önce → yoksa dün → hiçbiri yoksa `review_due` tarihi o günden
+önce olan en eski girdi gösterilir. Bir girdi, bu 3 günlük pencere içinde
+(hangi gün önce yakalarsa) **sadece bir kez** gösterilir; aynı render
+içinde başka bir gün sütununda tekrar çıkmaz.
 
-`last_reminded`, artık bir filtre değil — sadece görüldü/hatırlandı
-durumunu gösteren bir işaret. Her gün sütunu kendi içinde ikiye ayrılır:
-üstte henüz hatırlanmamışlar (yanlarında **✓ Hatırladım** linki), bir çizgi,
-altında hatırlanmışlar (soluk, ✓ işaretli, tıklanamaz). Linke tıklayınca
-`last_reminded` işaretlenir ve concept bir sonraki render'da otomatik olarak
-üst gruptan alt gruba düşer — kaybolmaz, sadece pasifleşir.
+`last_reminded` (artık not değil, GİRDİ seviyesinde tutulur), bir filtre
+değil — sadece görüldü/hatırlandı durumunu gösteren bir işaret. Her gün
+sütunu kendi içinde ikiye ayrılır: üstte henüz hatırlanmamışlar
+(yanlarında **✓ Hatırladım** linki), bir çizgi, altında hatırlanmışlar
+(soluk, ✓ işaretli, yanlarında **↺ Geri Al** linki). Başlık metni her iki
+durumda da tıklanabilir — notun ilgili `## [Tarih] — [Etiket]` bölümüne
+(`[[not-adi#anchor]]`) doğrudan gider.
 
 ```dataviewjs
 function normDate(v) {
@@ -80,15 +84,45 @@ function normDate(v) {
     return d ? d.toFormat("yyyy-MM-dd") : String(v);
 }
 
-async function markReminded(path) {
-    const file = app.vault.getAbstractFileByPath(path);
+// Notes/ klasöründeki her konu notunun entries[] listesini düz bir
+// girdi dizisine indirger - her öğe kendi tarihini/anchor'ını/
+// last_reminded durumunu taşıyan bağımsız bir birim olur.
+function flattenEntries() {
+    const notes = dv.pages('"Notes"').where(p => p.entries && p.entries.length);
+    const flat = [];
+    for (const n of notes) {
+        for (const e of n.entries) {
+            if (!e || !e.date) continue;
+            flat.push({
+                date: normDate(e.date),
+                label: e.label ?? "",
+                anchor: e.anchor ?? "",
+                review_due: e.review_due ? normDate(e.review_due) : null,
+                last_reminded: e.last_reminded ? normDate(e.last_reminded) : "",
+                noteTitle: n.title ?? n.file.name,
+                fileName: n.file.name,
+                filePath: n.file.path,
+            });
+        }
+    }
+    return flat;
+}
+
+function entryKey(e) { return e.filePath + "::" + e.anchor; }
+
+// Bir girdinin last_reminded'ini kendi entries[] öğesi içinde günceller -
+// artık notun kendisinde değil, ilgili anchor'a sahip girdide tutuluyor.
+async function setEntryReminded(filePath, anchor, value) {
+    const file = app.vault.getAbstractFileByPath(filePath);
     if (!file) return;
     await app.fileManager.processFrontMatter(file, (fm) => {
-        fm.last_reminded = moment().format("YYYY-MM-DD");
+        if (!fm.entries) return;
+        const entry = fm.entries.find(x => x.anchor === anchor);
+        if (entry) entry.last_reminded = value;
     });
 }
 
-function renderConceptLine(c, note, reminded) {
+function renderEntryLine(e, note, reminded) {
     const line = document.createElement("div");
     line.style.marginBottom = "4px";
     if (reminded) line.style.opacity = "0.55";
@@ -97,11 +131,12 @@ function renderConceptLine(c, note, reminded) {
 
     const a = document.createElement("a");
     a.className = "internal-link";
-    a.innerText = c.title ?? c.file.name;
-    a.href = c.file.path;
-    a.onclick = (e) => {
-        e.preventDefault();
-        app.workspace.openLinkText(c.file.path, "", false);
+    a.innerText = `${e.noteTitle} — ${e.label}`;
+    a.href = e.filePath;
+    a.style.cursor = "pointer";
+    a.onclick = (ev) => {
+        ev.preventDefault();
+        app.workspace.openLinkText(`${e.fileName}#${e.anchor}`, "", false);
     };
     line.appendChild(a);
     line.appendChild(document.createTextNode(` (${note}) `));
@@ -112,67 +147,77 @@ function renderConceptLine(c, note, reminded) {
         btn.style.cursor = "pointer";
         btn.style.fontSize = "0.85em";
         btn.style.color = "var(--text-accent)";
-        btn.onclick = async (e) => {
-            e.preventDefault();
+        btn.onclick = async (ev) => {
+            ev.preventDefault();
             btn.innerText = "…";
-            await markReminded(c.file.path);
+            await setEntryReminded(e.filePath, e.anchor, moment().format("YYYY-MM-DD"));
         };
         line.appendChild(btn);
+    } else {
+        const undo = document.createElement("a");
+        undo.innerText = "↺ Geri Al";
+        undo.style.cursor = "pointer";
+        undo.style.fontSize = "0.85em";
+        undo.style.color = "var(--text-muted)";
+        undo.onclick = async (ev) => {
+            ev.preventDefault();
+            undo.innerText = "…";
+            await setEntryReminded(e.filePath, e.anchor, "");
+        };
+        line.appendChild(undo);
     }
     return line;
 }
 
-// last_reminded artık bir filtre değil, sadece görüldü/hatırlandı durumu -
-// concept'ler yine güne atanıyor, sadece görüntülemede iki gruba ayrılıyor.
-const concepts = dv.pages('"Concepts"').where(p => p.type === "concept" && p.date_learned);
+const entries = flattenEntries();
 
 const days = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const weekStart = moment().startOf("isoWeek"); // Pazartesi
 
-// Bu render içinde bir gün sütununda gösterilen kavram, aynı render'daki
+// Bu render içinde bir gün sütununda gösterilen girdi, aynı render'daki
 // diğer gün sütunlarında tekrar edilmesin diye burada işaretleniyor.
 const claimed = new Set();
 
 function buildCell(dayMoment) {
     const dayStr = dayMoment.format("YYYY-MM-DD");
-    let entries = []; // {c, note}
+    let picked = []; // {e, note}
 
     for (const offset of [3, 2, 1]) {
         const targetStr = dayMoment.clone().subtract(offset, "days").format("YYYY-MM-DD");
-        const matches = concepts.where(c => normDate(c.date_learned) === targetStr && !claimed.has(c.file.path));
+        const matches = entries.filter(e => e.date === targetStr && !claimed.has(entryKey(e)));
         if (matches.length > 0) {
             const label = offset === 1 ? "dün" : `${offset} gün önce`;
-            for (const c of matches) {
-                claimed.add(c.file.path);
-                entries.push({ c, note: `${label} öğrenmiştin, hatırla` });
+            for (const e of matches) {
+                claimed.add(entryKey(e));
+                picked.push({ e, note: `${label} öğrenmiştin, hatırla` });
             }
             break; // gün belirlendi, offset döngüsünden çık
         }
     }
 
-    if (entries.length === 0) {
-        const overdue = concepts
-            .where(c => c.review_due && !claimed.has(c.file.path) && normDate(c.review_due) < dayStr)
-            .sort(c => normDate(c.review_due), 'asc');
+    if (picked.length === 0) {
+        const overdue = entries
+            .filter(e => e.review_due && !claimed.has(entryKey(e)) && e.review_due < dayStr)
+            .sort((a, b) => (a.review_due < b.review_due ? -1 : 1));
         if (overdue.length > 0) {
             const oldest = overdue[0];
-            claimed.add(oldest.file.path);
-            entries.push({ c: oldest, note: "en son bunu öğrenmiştin, hâlâ tekrar etmedin" });
+            claimed.add(entryKey(oldest));
+            picked.push({ e: oldest, note: "en son bunu öğrenmiştin, hâlâ tekrar etmedin" });
         }
     }
 
     const cell = document.createElement("div");
-    if (entries.length === 0) {
+    if (picked.length === 0) {
         cell.innerText = "-";
         return cell;
     }
 
-    const notReminded = entries.filter(e => !e.c.last_reminded);
-    const reminded = entries.filter(e => e.c.last_reminded);
+    const notReminded = picked.filter(p => !p.e.last_reminded);
+    const reminded = picked.filter(p => p.e.last_reminded);
 
-    for (const e of notReminded) cell.appendChild(renderConceptLine(e.c, e.note, false));
+    for (const p of notReminded) cell.appendChild(renderEntryLine(p.e, p.note, false));
     if (notReminded.length > 0 && reminded.length > 0) cell.appendChild(document.createElement("hr"));
-    for (const e of reminded) cell.appendChild(renderConceptLine(e.c, e.note, true));
+    for (const p of reminded) cell.appendChild(renderEntryLine(p.e, p.note, true));
 
     return cell;
 }
@@ -202,13 +247,18 @@ dv.container.appendChild(table);
 
 ## Haftalık Geriye Dönük Özet
 
-Hatırlatma *filtresinden* tamamen bağımsız — bir kez gösterilip kaybolmaz,
-her zaman (aşağıdaki 10 sınırı dahilinde) o haftada öğrenilenleri göstermeye
-devam eder. `date_learned`'e göre gruplanır, kategori/alt kategori başlıkları
-tıklanınca açılır. Her alt kategorinin altındaki concept listesi kendi
-içinde `last_reminded` durumuna göre ikiye ayrılır: üstte hatırlanmamışlar,
-bir çizgi, altında soluk/✓ işaretli hatırlanmışlar (burada tıklanabilir
-değiller, sadece durumu gösterir).
+**v2 (girdi-bazlı):** Artık NOT değil, GİRDİ bazlı — `Notes/` klasöründeki
+konu notlarının `entries` listesi taranır, her girdi kendi tarihiyle
+bağımsız bir birim olarak kategori→alt kategori→girdi hiyerarşisinde
+gruplanır (not değil, doğrudan girdi listesi). Hatırlatma *filtresinden*
+tamamen bağımsız — bir kez gösterilip kaybolmaz, her zaman (aşağıdaki 10
+sınırı dahilinde) o haftada öğrenilen girdileri göstermeye devam eder.
+Kategori/alt kategori başlıkları tıklanınca açılır. Her alt kategorinin
+altındaki girdi listesi kendi içinde `last_reminded` durumuna göre ikiye
+ayrılır: üstte hatırlanmamışlar (yanlarında **✓ Hatırladım**), bir çizgi,
+altında hatırlanmışlar (soluk, ✓ işaretli, yanlarında **↺ Geri Al**).
+Başlık her iki durumda da tıklanabilir — o girdinin `## [Tarih] —
+[Etiket]` bölümüne doğrudan gider.
 
 ```dataviewjs
 function normDate(v) {
@@ -217,52 +267,144 @@ function normDate(v) {
     return d ? d.toFormat("yyyy-MM-dd") : String(v);
 }
 
-const concepts = dv.pages('"Concepts"').where(p => p.type === "concept" && p.date_learned).array();
+function flattenEntries() {
+    const notes = dv.pages('"Notes"').where(p => p.entries && p.entries.length);
+    const flat = [];
+    for (const n of notes) {
+        for (const e of n.entries) {
+            if (!e || !e.date) continue;
+            flat.push({
+                date: normDate(e.date),
+                label: e.label ?? "",
+                anchor: e.anchor ?? "",
+                last_reminded: e.last_reminded ? normDate(e.last_reminded) : "",
+                category: n.category ? String(n.category) : "(Kategorisiz)",
+                subcategory: n.subcategory ? String(n.subcategory) : "(Alt kategorisiz)",
+                noteTitle: n.title ?? n.file.name,
+                fileName: n.file.name,
+                filePath: n.file.path,
+            });
+        }
+    }
+    return flat;
+}
 
-function periodMarkdown(periodConcepts) {
-    if (periodConcepts.length === 0) return "_Bu dönemde kavram yok._\n";
+async function setEntryReminded(filePath, anchor, value) {
+    const file = app.vault.getAbstractFileByPath(filePath);
+    if (!file) return;
+    await app.fileManager.processFrontMatter(file, (fm) => {
+        if (!fm.entries) return;
+        const entry = fm.entries.find(x => x.anchor === anchor);
+        if (entry) entry.last_reminded = value;
+    });
+}
 
-    const byCategory = {};
-    for (const c of periodConcepts) {
-        const cat = c.category ? String(c.category) : "(Kategorisiz)";
-        const sub = c.subcategory ? String(c.subcategory) : "(Alt kategorisiz)";
-        byCategory[cat] = byCategory[cat] || {};
-        byCategory[cat][sub] = byCategory[cat][sub] || [];
-        byCategory[cat][sub].push(c);
+function renderEntryLine(e, reminded) {
+    const line = document.createElement("div");
+    line.style.marginBottom = "2px";
+    if (reminded) line.style.opacity = "0.55";
+
+    if (reminded) line.appendChild(document.createTextNode("✓ "));
+
+    const a = document.createElement("a");
+    a.className = "internal-link";
+    a.innerText = `${e.noteTitle} — ${e.label}`;
+    a.href = e.filePath;
+    a.style.cursor = "pointer";
+    a.onclick = (ev) => {
+        ev.preventDefault();
+        app.workspace.openLinkText(`${e.fileName}#${e.anchor}`, "", false);
+    };
+    line.appendChild(a);
+
+    const action = document.createElement("a");
+    action.style.cursor = "pointer";
+    action.style.fontSize = "0.85em";
+    action.style.marginLeft = "6px";
+    if (!reminded) {
+        action.innerText = "✓ Hatırladım";
+        action.style.color = "var(--text-accent)";
+        action.onclick = async (ev) => {
+            ev.preventDefault();
+            action.innerText = "…";
+            await setEntryReminded(e.filePath, e.anchor, moment().format("YYYY-MM-DD"));
+        };
+    } else {
+        action.innerText = "↺ Geri Al";
+        action.style.color = "var(--text-muted)";
+        action.onclick = async (ev) => {
+            ev.preventDefault();
+            action.innerText = "…";
+            await setEntryReminded(e.filePath, e.anchor, "");
+        };
+    }
+    line.appendChild(action);
+
+    return line;
+}
+
+function buildPeriodEl(periodEntries) {
+    if (periodEntries.length === 0) {
+        const p = document.createElement("p");
+        p.innerText = "Bu dönemde girdi yok.";
+        return p;
     }
 
-    let md = "";
+    const byCategory = {};
+    for (const e of periodEntries) {
+        byCategory[e.category] = byCategory[e.category] || {};
+        byCategory[e.category][e.subcategory] = byCategory[e.category][e.subcategory] || [];
+        byCategory[e.category][e.subcategory].push(e);
+    }
+
+    const wrap = document.createElement("div");
     for (const cat of Object.keys(byCategory).sort()) {
         const subMap = byCategory[cat];
         const catTotal = Object.values(subMap).reduce((sum, arr) => sum + arr.length, 0);
-        md += `<details><summary>${cat} (${catTotal})</summary>\n\n`;
+
+        const catDetails = document.createElement("details");
+        const catSummary = document.createElement("summary");
+        catSummary.innerText = `${cat} (${catTotal})`;
+        catDetails.appendChild(catSummary);
+
         for (const sub of Object.keys(subMap).sort()) {
-            const list = subMap[sub].sort((a, b) => (normDate(b.date_learned) ?? "").localeCompare(normDate(a.date_learned) ?? ""));
-            md += `<details><summary>${sub} (${list.length})</summary>\n\n`;
+            const list = subMap[sub].slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+
+            const subDetails = document.createElement("details");
+            subDetails.style.marginLeft = "16px";
+            subDetails.style.marginTop = "4px";
+            const subSummary = document.createElement("summary");
+            subSummary.innerText = `${sub} (${list.length})`;
+            subDetails.appendChild(subSummary);
 
             const shown = list.slice(0, 10);
-            const notReminded = shown.filter(c => !c.last_reminded);
-            const reminded = shown.filter(c => c.last_reminded);
+            const notReminded = shown.filter(e => !e.last_reminded);
+            const reminded = shown.filter(e => e.last_reminded);
 
-            for (const c of notReminded) {
-                md += `- [[${c.file.name}|${c.title ?? c.file.name}]]\n`;
-            }
-            if (notReminded.length > 0 && reminded.length > 0) {
-                md += `\n---\n\n`;
-            }
-            for (const c of reminded) {
-                md += `- <span style="opacity:0.55;">✓ [[${c.file.name}|${c.title ?? c.file.name}]]</span>\n`;
-            }
+            const listWrap = document.createElement("div");
+            listWrap.style.marginLeft = "16px";
+            listWrap.style.marginTop = "4px";
+            for (const e of notReminded) listWrap.appendChild(renderEntryLine(e, false));
+            if (notReminded.length > 0 && reminded.length > 0) listWrap.appendChild(document.createElement("hr"));
+            for (const e of reminded) listWrap.appendChild(renderEntryLine(e, true));
 
             if (list.length > 10) {
-                md += `\n_+${list.length - 10} tane daha (toplam ${list.length})_\n`;
+                const more = document.createElement("p");
+                more.style.fontSize = "0.85em";
+                more.style.opacity = "0.7";
+                more.innerText = `+${list.length - 10} tane daha (toplam ${list.length})`;
+                listWrap.appendChild(more);
             }
-            md += `\n</details>\n\n`;
+
+            subDetails.appendChild(listWrap);
+            catDetails.appendChild(subDetails);
         }
-        md += `</details>\n\n`;
+        wrap.appendChild(catDetails);
     }
-    return md;
+    return wrap;
 }
+
+const entries = flattenEntries();
 
 function weekRange(n) { // n=1 -> geçen hafta
     const start = moment().startOf("isoWeek").subtract(n, "weeks");
@@ -271,22 +413,34 @@ function weekRange(n) { // n=1 -> geçen hafta
 }
 
 const weekLabels = ["Geçen Hafta", "2 Hafta Önce", "3 Hafta Önce", "4 Hafta Önce"];
-const cols = weekLabels.map((label, idx) => {
+const container = document.createElement("div");
+container.style.display = "flex";
+container.style.gap = "16px";
+container.style.flexWrap = "wrap";
+container.style.alignItems = "flex-start";
+
+weekLabels.forEach((label, idx) => {
     const [start, end] = weekRange(idx + 1);
-    const periodConcepts = concepts.filter(c => {
-        const d = normDate(c.date_learned);
-        return d && d >= start && d <= end;
-    });
-    return `<div style="flex:1;min-width:220px;">\n\n**${label} (${periodConcepts.length})**\n\n${periodMarkdown(periodConcepts)}\n</div>`;
+    const periodEntries = entries.filter(e => e.date >= start && e.date <= end);
+
+    const col = document.createElement("div");
+    col.style.flex = "1";
+    col.style.minWidth = "220px";
+    const heading = document.createElement("p");
+    heading.innerHTML = `<strong>${label} (${periodEntries.length})</strong>`;
+    col.appendChild(heading);
+    col.appendChild(buildPeriodEl(periodEntries));
+    container.appendChild(col);
 });
 
-const wrap = `<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;">\n\n${cols.join("\n\n")}\n\n</div>`;
-dv.el("div", wrap);
+dv.container.appendChild(container);
 ```
 
 ## Aylık Geriye Dönük Özet
 
-Aynı mantık, aylık pencerelerle (son 3 ay).
+**v2 (girdi-bazlı):** Aynı mantık, aynı kategori→alt kategori→girdi
+hiyerarşisi, aynı ✓ Hatırladım/↺ Geri Al ve anchor-linki davranışı — sadece
+aylık pencerelerle (son 3 ay).
 
 ```dataviewjs
 function normDate(v) {
@@ -295,52 +449,144 @@ function normDate(v) {
     return d ? d.toFormat("yyyy-MM-dd") : String(v);
 }
 
-const concepts = dv.pages('"Concepts"').where(p => p.type === "concept" && p.date_learned).array();
+function flattenEntries() {
+    const notes = dv.pages('"Notes"').where(p => p.entries && p.entries.length);
+    const flat = [];
+    for (const n of notes) {
+        for (const e of n.entries) {
+            if (!e || !e.date) continue;
+            flat.push({
+                date: normDate(e.date),
+                label: e.label ?? "",
+                anchor: e.anchor ?? "",
+                last_reminded: e.last_reminded ? normDate(e.last_reminded) : "",
+                category: n.category ? String(n.category) : "(Kategorisiz)",
+                subcategory: n.subcategory ? String(n.subcategory) : "(Alt kategorisiz)",
+                noteTitle: n.title ?? n.file.name,
+                fileName: n.file.name,
+                filePath: n.file.path,
+            });
+        }
+    }
+    return flat;
+}
 
-function periodMarkdown(periodConcepts) {
-    if (periodConcepts.length === 0) return "_Bu dönemde kavram yok._\n";
+async function setEntryReminded(filePath, anchor, value) {
+    const file = app.vault.getAbstractFileByPath(filePath);
+    if (!file) return;
+    await app.fileManager.processFrontMatter(file, (fm) => {
+        if (!fm.entries) return;
+        const entry = fm.entries.find(x => x.anchor === anchor);
+        if (entry) entry.last_reminded = value;
+    });
+}
 
-    const byCategory = {};
-    for (const c of periodConcepts) {
-        const cat = c.category ? String(c.category) : "(Kategorisiz)";
-        const sub = c.subcategory ? String(c.subcategory) : "(Alt kategorisiz)";
-        byCategory[cat] = byCategory[cat] || {};
-        byCategory[cat][sub] = byCategory[cat][sub] || [];
-        byCategory[cat][sub].push(c);
+function renderEntryLine(e, reminded) {
+    const line = document.createElement("div");
+    line.style.marginBottom = "2px";
+    if (reminded) line.style.opacity = "0.55";
+
+    if (reminded) line.appendChild(document.createTextNode("✓ "));
+
+    const a = document.createElement("a");
+    a.className = "internal-link";
+    a.innerText = `${e.noteTitle} — ${e.label}`;
+    a.href = e.filePath;
+    a.style.cursor = "pointer";
+    a.onclick = (ev) => {
+        ev.preventDefault();
+        app.workspace.openLinkText(`${e.fileName}#${e.anchor}`, "", false);
+    };
+    line.appendChild(a);
+
+    const action = document.createElement("a");
+    action.style.cursor = "pointer";
+    action.style.fontSize = "0.85em";
+    action.style.marginLeft = "6px";
+    if (!reminded) {
+        action.innerText = "✓ Hatırladım";
+        action.style.color = "var(--text-accent)";
+        action.onclick = async (ev) => {
+            ev.preventDefault();
+            action.innerText = "…";
+            await setEntryReminded(e.filePath, e.anchor, moment().format("YYYY-MM-DD"));
+        };
+    } else {
+        action.innerText = "↺ Geri Al";
+        action.style.color = "var(--text-muted)";
+        action.onclick = async (ev) => {
+            ev.preventDefault();
+            action.innerText = "…";
+            await setEntryReminded(e.filePath, e.anchor, "");
+        };
+    }
+    line.appendChild(action);
+
+    return line;
+}
+
+function buildPeriodEl(periodEntries) {
+    if (periodEntries.length === 0) {
+        const p = document.createElement("p");
+        p.innerText = "Bu dönemde girdi yok.";
+        return p;
     }
 
-    let md = "";
+    const byCategory = {};
+    for (const e of periodEntries) {
+        byCategory[e.category] = byCategory[e.category] || {};
+        byCategory[e.category][e.subcategory] = byCategory[e.category][e.subcategory] || [];
+        byCategory[e.category][e.subcategory].push(e);
+    }
+
+    const wrap = document.createElement("div");
     for (const cat of Object.keys(byCategory).sort()) {
         const subMap = byCategory[cat];
         const catTotal = Object.values(subMap).reduce((sum, arr) => sum + arr.length, 0);
-        md += `<details><summary>${cat} (${catTotal})</summary>\n\n`;
+
+        const catDetails = document.createElement("details");
+        const catSummary = document.createElement("summary");
+        catSummary.innerText = `${cat} (${catTotal})`;
+        catDetails.appendChild(catSummary);
+
         for (const sub of Object.keys(subMap).sort()) {
-            const list = subMap[sub].sort((a, b) => (normDate(b.date_learned) ?? "").localeCompare(normDate(a.date_learned) ?? ""));
-            md += `<details><summary>${sub} (${list.length})</summary>\n\n`;
+            const list = subMap[sub].slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+
+            const subDetails = document.createElement("details");
+            subDetails.style.marginLeft = "16px";
+            subDetails.style.marginTop = "4px";
+            const subSummary = document.createElement("summary");
+            subSummary.innerText = `${sub} (${list.length})`;
+            subDetails.appendChild(subSummary);
 
             const shown = list.slice(0, 10);
-            const notReminded = shown.filter(c => !c.last_reminded);
-            const reminded = shown.filter(c => c.last_reminded);
+            const notReminded = shown.filter(e => !e.last_reminded);
+            const reminded = shown.filter(e => e.last_reminded);
 
-            for (const c of notReminded) {
-                md += `- [[${c.file.name}|${c.title ?? c.file.name}]]\n`;
-            }
-            if (notReminded.length > 0 && reminded.length > 0) {
-                md += `\n---\n\n`;
-            }
-            for (const c of reminded) {
-                md += `- <span style="opacity:0.55;">✓ [[${c.file.name}|${c.title ?? c.file.name}]]</span>\n`;
-            }
+            const listWrap = document.createElement("div");
+            listWrap.style.marginLeft = "16px";
+            listWrap.style.marginTop = "4px";
+            for (const e of notReminded) listWrap.appendChild(renderEntryLine(e, false));
+            if (notReminded.length > 0 && reminded.length > 0) listWrap.appendChild(document.createElement("hr"));
+            for (const e of reminded) listWrap.appendChild(renderEntryLine(e, true));
 
             if (list.length > 10) {
-                md += `\n_+${list.length - 10} tane daha (toplam ${list.length})_\n`;
+                const more = document.createElement("p");
+                more.style.fontSize = "0.85em";
+                more.style.opacity = "0.7";
+                more.innerText = `+${list.length - 10} tane daha (toplam ${list.length})`;
+                listWrap.appendChild(more);
             }
-            md += `\n</details>\n\n`;
+
+            subDetails.appendChild(listWrap);
+            catDetails.appendChild(subDetails);
         }
-        md += `</details>\n\n`;
+        wrap.appendChild(catDetails);
     }
-    return md;
+    return wrap;
 }
+
+const entries = flattenEntries();
 
 function monthRange(n) { // n=1 -> geçen ay
     const start = moment().startOf("month").subtract(n, "months");
@@ -349,17 +595,27 @@ function monthRange(n) { // n=1 -> geçen ay
 }
 
 const monthLabels = ["Geçen Ay", "Önceki Ay", "Ondan Önceki Ay"];
-const cols = monthLabels.map((label, idx) => {
+const container = document.createElement("div");
+container.style.display = "flex";
+container.style.gap = "16px";
+container.style.flexWrap = "wrap";
+container.style.alignItems = "flex-start";
+
+monthLabels.forEach((label, idx) => {
     const [start, end] = monthRange(idx + 1);
-    const periodConcepts = concepts.filter(c => {
-        const d = normDate(c.date_learned);
-        return d && d >= start && d <= end;
-    });
-    return `<div style="flex:1;min-width:220px;">\n\n**${label} (${periodConcepts.length})**\n\n${periodMarkdown(periodConcepts)}\n</div>`;
+    const periodEntries = entries.filter(e => e.date >= start && e.date <= end);
+
+    const col = document.createElement("div");
+    col.style.flex = "1";
+    col.style.minWidth = "220px";
+    const heading = document.createElement("p");
+    heading.innerHTML = `<strong>${label} (${periodEntries.length})</strong>`;
+    col.appendChild(heading);
+    col.appendChild(buildPeriodEl(periodEntries));
+    container.appendChild(col);
 });
 
-const wrap = `<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;">\n\n${cols.join("\n\n")}\n\n</div>`;
-dv.el("div", wrap);
+dv.container.appendChild(container);
 ```
 
 ## Gecikmiş Tekrarlar (review_due geçmiş, hiç gösterilmemiş olabilir)

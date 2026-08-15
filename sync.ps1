@@ -2,7 +2,7 @@
 Second Sight - iki bagimsiz git deposunu (public/private) tek komutla
 senkronize eder. Ayni klasor iki ayri .git dizini tarafindan izlenir:
   .git-public  -> altyapi/kod (sablonlar, dashboard, README, script)
-  .git-private -> gercek notlar (Sessions, Concepts, Weekly-Summaries,
+  .git-private -> gercek notlar (Notes, Sessions, Concepts, Weekly-Summaries,
                    _staging, _manifest.json, _index, _ogrenme-tercihlerim.md)
 
 Kullanim:
@@ -28,6 +28,7 @@ $publicPaths = @(
 )
 
 $privatePaths = @(
+    "Notes",
     "Sessions",
     "Concepts",
     "Weekly-Summaries",
