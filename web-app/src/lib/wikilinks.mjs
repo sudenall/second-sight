@@ -15,19 +15,17 @@ function slugsIn(dir) {
 }
 
 /**
- * Builds a target->href resolver by scanning Concepts/ and Sessions/ once.
- * Unresolved wikilink targets (e.g. pointing at _ogrenme-tercihlerim.md,
- * which isn't part of the public site) fall back to plain, non-linked text
- * rather than producing a dead link.
+ * Builds a target->href resolver by scanning Notes/ once. Unresolved
+ * wikilink targets (e.g. pointing at _ogrenme-tercihlerim.md, which isn't
+ * part of the public site) fall back to plain, non-linked text rather than
+ * producing a dead link.
  */
 export function buildWikilinkResolver(vaultDir) {
-  const conceptSlugs = slugsIn(path.join(vaultDir, "Concepts"));
-  const sessionSlugs = slugsIn(path.join(vaultDir, "Sessions"));
+  const noteSlugs = slugsIn(path.join(vaultDir, "Notes"));
 
   return (rawTarget) => {
     const target = rawTarget.trim();
-    if (conceptSlugs.has(target)) return `/concepts/${target}/`;
-    if (sessionSlugs.has(target)) return `/sessions/${target}/`;
+    if (noteSlugs.has(target)) return `/notes/${target}/`;
     return null;
   };
 }
@@ -71,13 +69,4 @@ export function remarkWikilinks(resolve) {
       }
     });
   };
-}
-
-/** Parses a single "[[target]]" or "[[target|Alias]]" string (used for frontmatter fields, not body markdown). */
-export function parseWikilinkString(raw) {
-  if (!raw) return null;
-  const match = /^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/.exec(raw.trim());
-  if (!match) return null;
-  const [, target, alias] = match;
-  return { target: target.trim(), label: (alias ?? target).trim() };
 }

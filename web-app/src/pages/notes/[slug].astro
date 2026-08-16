@@ -1,25 +1,19 @@
 ---
 import { getCollection, render } from "astro:content";
 import Layout from "../../components/Layout.astro";
-import T from "../../components/T.astro";
 import NoteTitle from "../../components/NoteTitle.astro";
-import { parseWikilinkString } from "../../lib/wikilinks.mjs";
 import { slugify } from "../../lib/slug";
 
 export async function getStaticPaths() {
-  const concepts = await getCollection("concepts");
-  return concepts.map((c) => ({
-    params: { slug: c.id },
-    props: { entry: c },
+  const notes = await getCollection("notes");
+  return notes.map((n) => ({
+    params: { slug: n.id },
+    props: { entry: n },
   }));
 }
 
 const { entry } = Astro.props;
 const { Content } = await render(entry);
-
-const sessionLink = parseWikilinkString(entry.data.parent_session);
-const sessions = await getCollection("sessions");
-const sessionEntry = sessionLink ? sessions.find((s) => s.id === sessionLink.target) : undefined;
 ---
 
 <Layout title={entry.data.title}>
@@ -34,8 +28,6 @@ const sessionEntry = sessionLink ? sessions.find((s) => s.id === sessionLink.tar
   <div class="mb-6 flex flex-wrap gap-2 text-xs text-ink-muted">
     <span class="badge border border-border">{entry.data.category}</span>
     <span class="badge border border-border">{entry.data.subcategory}</span>
-    {entry.data.difficulty && <span class="badge border border-border">{entry.data.difficulty}</span>}
-    {entry.data.date_learned && <span class="badge border border-border">{entry.data.date_learned}</span>}
     {
       entry.data.tags.map((tag) => (
         <span class="badge bg-bg-softer text-accent-soft">#{tag}</span>
@@ -44,17 +36,19 @@ const sessionEntry = sessionLink ? sessions.find((s) => s.id === sessionLink.tar
   </div>
 
   {
-    sessionEntry && (
-      <p class="mb-6 text-sm text-ink-muted">
-        <T k="source_session" />:{" "}
-        <a href={`/sessions/${sessionEntry.id}/`}>
-          <NoteTitle tr={sessionEntry.data.title} en={sessionEntry.data.title_en} />
-        </a>
-      </p>
+    entry.data.entries.length > 0 && (
+      <div class="mb-6 flex flex-wrap gap-2 text-xs text-ink-muted">
+        {entry.data.entries.map((e) => (
+          <span class="badge border border-border" title={e.label}>
+            {e.date || "?"}
+          </span>
+        ))}
+      </div>
     )
   }
 
-  <article class="prose-note">
+  <article class="prose-note lang-tr-block">
     <Content />
   </article>
+  <article class="prose-note lang-en-block" hidden set:html={entry.data.enHtml} />
 </Layout>

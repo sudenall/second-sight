@@ -1,5 +1,6 @@
-// UI-only translation dictionary. Never used for note body content -
-// concept/session prose always stays Turkish regardless of this toggle.
+// UI-only translation dictionary. Never used for note body content - a
+// note's Turkish/English body split is handled separately (see
+// notes-loader.mjs and pages/notes/[slug].astro).
 export const dict = {
   site_title: { tr: "Second Sight", en: "Second Sight" },
   nav_home: { tr: "Ana Sayfa", en: "Home" },
@@ -18,7 +19,7 @@ export const dict = {
     tr: "en son bunu öğrenmiştin, hâlâ tekrar etmedin",
     en: "this was the last thing you learned, you still haven't reviewed it",
   },
-  empty_no_concepts: { tr: "Bu dönemde kavram yok.", en: "No concepts in this period." },
+  empty_no_concepts: { tr: "Bu dönemde girdi yok.", en: "No entries in this period." },
   more_items: { tr: "tane daha (toplam {total})", en: "more (total {total})" },
   last_week: { tr: "Geçen Hafta", en: "Last Week" },
   weeks_ago_2: { tr: "2 Hafta Önce", en: "2 Weeks Ago" },
@@ -27,18 +28,10 @@ export const dict = {
   last_month: { tr: "Geçen Ay", en: "Last Month" },
   month_before: { tr: "Önceki Ay", en: "Month Before" },
   month_before_that: { tr: "Ondan Önceki Ay", en: "Month Before That" },
-  difficulty_label: { tr: "Zorluk", en: "Difficulty" },
-  learned_on_label: { tr: "Öğrenilme Tarihi", en: "Date Learned" },
-  status_label: { tr: "Durum", en: "Status" },
-  concept_label: { tr: "Kavram", en: "Concept" },
-  what_is_it: { tr: "Kavram Nedir", en: "What Is It" },
-  what_i_asked: { tr: "Ne Sordum", en: "What I Asked" },
-  where_i_struggled: { tr: "Nerede Zorlandım", en: "Where I Struggled" },
-  what_became_clear: { tr: "Netleşen Sonuç", en: "What Became Clear" },
-  related_concepts: { tr: "Bağlantılı Kavramlar", en: "Related Concepts" },
-  source_session: { tr: "Kaynak oturum", en: "Source session" },
-  session_summary: { tr: "Oturum Özeti", en: "Session Summary" },
-  session_concepts: { tr: "Bu Oturumda Doğan Kavramlar", en: "Concepts From This Session" },
+  note_label: { tr: "Not", en: "Note" },
+  tags_label: { tr: "Etiketler", en: "Tags" },
+  entries_count_label: { tr: "Girdi Sayısı", en: "Entries" },
+  last_updated_label: { tr: "Son Güncelleme", en: "Last Updated" },
   weekly_reports_empty: {
     tr: "Henüz rapor yok. Bu sayfa, Weekly-Summaries/ klasörüne yeni notlar eklendikçe otomatik dolacak.",
     en: "No reports yet. This page will fill in automatically as notes are added to Weekly-Summaries/.",

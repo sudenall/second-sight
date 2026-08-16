@@ -3,6 +3,7 @@ import { glob } from "astro/loaders";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { getVaultDataDir } from "../lib/vault-dir.mjs";
+import { notesLoader } from "../lib/notes-loader.mjs";
 
 const vaultDir = getVaultDataDir();
 
@@ -10,6 +11,12 @@ const vaultDir = getVaultDataDir();
 // somewhere in Astro's glob loader - pass a proper file:// URL instead.
 function base(...segments: string[]) {
   return pathToFileURL(path.join(vaultDir, ...segments) + path.sep).href;
+}
+
+// notesLoader (our custom loader) reads the filesystem directly with
+// node:fs, so it needs a plain OS path, not a file:// URL.
+function baseDir(...segments: string[]) {
+  return path.join(vaultDir, ...segments);
 }
 
 // Frontmatter date-like fields can arrive as a plain "YYYY-MM-DD" string
@@ -20,6 +27,7 @@ function base(...segments: string[]) {
 // one type.
 const dateLike = z
   .union([z.string(), z.date()])
+  .nullable()
   .optional()
   .default("")
   .transform((v) => {
@@ -28,36 +36,41 @@ const dateLike = z
     return v;
   });
 
-const concepts = defineCollection({
-  loader: glob({ pattern: "*.md", base: base("Concepts") }),
+// v2 model: a topic note under Notes/ with a list of dated entries, each
+// its own "## [Date] — [Label]" section in the body. The body itself is
+// split (by notesLoader, see src/lib/notes-loader.mjs) into a Turkish half
+// and an English half at the "---\n## English Version" marker - the
+// Turkish half renders as the normal <Content /> via entry.rendered, the
+// English half is precomputed HTML in entry.data.enHtml.
+//
+// entryAnchorMap (also populated by notesLoader) maps each entry's literal
+// `anchor` frontmatter text to the actual heading id Astro's markdown
+// pipeline generated for it (from entry.rendered.metadata.headings) - so
+// links to a specific entry can point at /notes/<slug>/#<real-heading-id>
+// instead of guessing a slug independently.
+const notes = defineCollection({
+  loader: notesLoader({ base: baseDir("Notes") }),
   schema: z.object({
-    type: z.literal("concept"),
+    type: z.literal("note"),
     title: z.string(),
     title_en: z.string().optional().default(""),
-    date_learned: dateLike,
-    parent_session: z.string().optional().default(""),
     category: z.string(),
     subcategory: z.string(),
     tags: z.array(z.string()).default([]),
-    difficulty: z.string().optional().default(""),
-    review_due: dateLike,
-    last_reminded: dateLike,
-    status: z.string().optional().default(""),
-    related: z.array(z.string()).default([]),
-  }),
-});
-
-const sessions = defineCollection({
-  loader: glob({ pattern: "*.md", base: base("Sessions") }),
-  schema: z.object({
-    type: z.literal("session"),
-    title: z.string(),
-    title_en: z.string().optional().default(""),
-    date_learned: dateLike,
-    source_url: z.string().optional().default(""),
-    category: z.string(),
-    subcategory: z.string(),
-    concepts: z.array(z.string()).default([]),
+    entries: z
+      .array(
+        z.object({
+          date: dateLike,
+          label: z.string(),
+          anchor: z.string(),
+          review_due: dateLike,
+          last_reminded: dateLike,
+        }),
+      )
+      .default([]),
+    // Populated by notesLoader, not present in the file's frontmatter.
+    enHtml: z.string().optional().default(""),
+    entryAnchorMap: z.record(z.string()).optional().default({}),
   }),
 });
 
@@ -71,4 +84,4 @@ const weeklySummaries = defineCollection({
   }),
 });
 
-export const collections = { concepts, sessions, weeklySummaries };
+export const collections = { weeklySummaries, notes };

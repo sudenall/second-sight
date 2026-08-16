@@ -1,18 +1,20 @@
 ---
 import T from "./T.astro";
 
-interface ConceptRef {
-  slug: string;
-  title: string;
-  title_en: string;
-  date_learned: string;
-  review_due: string;
-  last_reminded: string;
+interface EntryRef {
+  noteSlug: string;
+  noteTitle: string;
+  noteTitleEn: string;
+  date: string;
+  label: string;
+  reviewDue: string;
+  lastReminded: string;
+  headingSlug: string;
 }
 interface Props {
-  concepts: ConceptRef[];
+  entries: EntryRef[];
 }
-const { concepts } = Astro.props;
+const { entries } = Astro.props;
 ---
 
 <section class="card mb-6">
@@ -33,14 +35,22 @@ const { concepts } = Astro.props;
   </div>
 </section>
 
-<script define:vars={{ concepts }}>
-  window.__ssConceptsForReminders = concepts;
+<script define:vars={{ entries }}>
+  window.__ssEntriesForReminders = entries;
 </script>
 <script>
   import { dict } from "../lib/i18n";
 
-  const concepts = window.__ssConceptsForReminders;
+  const entries = window.__ssEntriesForReminders;
   const DAY_KEYS = ["day_mon", "day_tue", "day_wed", "day_thu", "day_fri", "day_sat", "day_sun"];
+
+  // A note can have several dated entries, so "which one is this" needs
+  // more than just the note's slug (that's how the old, one-date-per-
+  // concept version keyed things) - date+label is unique per entry within
+  // a note, matching entryKey() in Reminders/Home.md (filePath+anchor).
+  function entryKey(e) {
+    return `${e.noteSlug}::${e.date}::${e.label}`;
+  }
 
   function fmt(d) {
     const y = d.getFullYear();
@@ -71,44 +81,48 @@ const { concepts } = Astro.props;
     for (let i = 0; i < 7; i++) {
       const day = addDays(weekStart, i);
       const dayStr = fmt(day);
-      let entries = [];
+      let picked = [];
 
       for (const offset of [3, 2, 1]) {
         const targetStr = fmt(addDays(day, -offset));
-        const matches = concepts.filter((c) => c.date_learned === targetStr && !claimed.has(c.slug));
+        const matches = entries.filter((e) => e.date === targetStr && !claimed.has(entryKey(e)));
         if (matches.length > 0) {
-          for (const c of matches) {
-            claimed.add(c.slug);
-            entries.push({ c, offset });
+          for (const e of matches) {
+            claimed.add(entryKey(e));
+            picked.push({ e, offset });
           }
           break;
         }
       }
 
-      if (entries.length === 0) {
-        const overdue = concepts
-          .filter((c) => c.review_due && !claimed.has(c.slug) && c.review_due < dayStr)
-          .sort((a, b) => (a.review_due < b.review_due ? -1 : 1));
+      if (picked.length === 0) {
+        const overdue = entries
+          .filter((e) => e.reviewDue && !claimed.has(entryKey(e)) && e.reviewDue < dayStr)
+          .sort((a, b) => (a.reviewDue < b.reviewDue ? -1 : 1));
         if (overdue.length > 0) {
           const oldest = overdue[0];
-          claimed.add(oldest.slug);
-          entries.push({ c: oldest, offset: null });
+          claimed.add(entryKey(oldest));
+          picked.push({ e: oldest, offset: null });
         }
       }
 
-      columns.push({ dayKey: DAY_KEYS[i], entries });
+      columns.push({ dayKey: DAY_KEYS[i], picked });
     }
     return columns;
   }
 
-  function pickTitle(c, lang) {
-    return lang === "en" && c.title_en ? c.title_en : c.title;
+  function pickTitle(e, lang) {
+    return lang === "en" && e.noteTitleEn ? e.noteTitleEn : e.noteTitle;
   }
 
-  function noteText(entry, lang, dict) {
-    if (entry.offset === null) return dict.overdue_fallback[lang];
-    if (entry.offset === 1) return dict.learned_yesterday[lang];
-    return dict.learned_days_ago[lang].replace("{n}", String(entry.offset));
+  function noteText(item, lang, dict) {
+    if (item.offset === null) return dict.overdue_fallback[lang];
+    if (item.offset === 1) return dict.learned_yesterday[lang];
+    return dict.learned_days_ago[lang].replace("{n}", String(item.offset));
+  }
+
+  function entryHref(e) {
+    return e.headingSlug ? `/notes/${e.noteSlug}/#${e.headingSlug}` : `/notes/${e.noteSlug}/`;
   }
 
   function render(dict) {
@@ -134,23 +148,23 @@ const { concepts } = Astro.props;
       const td = document.createElement("td");
       td.className = "border border-border px-2 py-2 align-top";
 
-      if (col.entries.length === 0) {
+      if (col.picked.length === 0) {
         td.innerHTML = `<span class="text-ink-faint">${dict.no_reminder[lang]}</span>`;
         bodyRow.appendChild(td);
         continue;
       }
 
-      const notReminded = col.entries.filter((e) => !e.c.last_reminded);
-      const reminded = col.entries.filter((e) => e.c.last_reminded);
+      const notReminded = col.picked.filter((item) => !item.e.lastReminded);
+      const reminded = col.picked.filter((item) => item.e.lastReminded);
 
-      for (const e of notReminded) {
+      for (const item of notReminded) {
         const line = document.createElement("div");
         line.className = "mb-1";
         const a = document.createElement("a");
-        a.href = `/concepts/${e.c.slug}/`;
-        a.textContent = pickTitle(e.c, lang);
+        a.href = entryHref(item.e);
+        a.textContent = `${pickTitle(item.e, lang)} — ${item.e.label}`;
         line.appendChild(a);
-        line.appendChild(document.createTextNode(" — " + noteText(e, lang, dict)));
+        line.appendChild(document.createTextNode(" — " + noteText(item, lang, dict)));
         td.appendChild(line);
       }
 
@@ -160,10 +174,14 @@ const { concepts } = Astro.props;
         td.appendChild(hr);
       }
 
-      for (const e of reminded) {
+      for (const item of reminded) {
         const line = document.createElement("div");
         line.className = "mb-1 opacity-50";
-        line.textContent = "✓ " + pickTitle(e.c, lang) + " — " + dict.reminded_badge[lang];
+        const a = document.createElement("a");
+        a.href = entryHref(item.e);
+        a.textContent = "✓ " + pickTitle(item.e, lang) + " — " + item.e.label;
+        line.appendChild(a);
+        line.appendChild(document.createTextNode(" — " + dict.reminded_badge[lang]));
         td.appendChild(line);
       }
 

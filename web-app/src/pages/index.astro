@@ -5,38 +5,17 @@ import DailyReminders from "../components/DailyReminders.astro";
 import RetrospectiveTables from "../components/RetrospectiveTables.astro";
 import T from "../components/T.astro";
 import { slugify } from "../lib/slug";
+import { flattenNoteEntries } from "../lib/flatten-entries";
 
-const allConcepts = await getCollection("concepts");
+const allNotes = await getCollection("notes");
+const entries = flattenNoteEntries(allNotes);
 
-const reminderConcepts = allConcepts
-  .filter((c) => c.data.date_learned)
-  .map((c) => ({
-    slug: c.id,
-    title: c.data.title,
-    title_en: c.data.title_en,
-    date_learned: c.data.date_learned,
-    review_due: c.data.review_due,
-    last_reminded: c.data.last_reminded,
-  }));
-
-const retroConcepts = allConcepts
-  .filter((c) => c.data.date_learned)
-  .map((c) => ({
-    slug: c.id,
-    title: c.data.title,
-    title_en: c.data.title_en,
-    category: c.data.category,
-    subcategory: c.data.subcategory,
-    date_learned: c.data.date_learned,
-    last_reminded: c.data.last_reminded,
-  }));
-
-const categories = Array.from(new Set(allConcepts.map((c) => c.data.category))).sort();
+const categories = Array.from(new Set(allNotes.map((n) => n.data.category))).sort();
 ---
 
 <Layout title="Ana Sayfa">
-  <DailyReminders concepts={reminderConcepts} />
-  <RetrospectiveTables concepts={retroConcepts} />
+  <DailyReminders entries={entries} />
+  <RetrospectiveTables entries={entries} />
 
   <section class="card">
     <h2 class="mb-3 text-base font-semibold"><T k="categories_title" /></h2>

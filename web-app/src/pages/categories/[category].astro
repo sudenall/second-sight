@@ -6,8 +6,8 @@ import NoteTitle from "../../components/NoteTitle.astro";
 import { slugify } from "../../lib/slug";
 
 export async function getStaticPaths() {
-  const allConcepts = await getCollection("concepts");
-  const categories = Array.from(new Set(allConcepts.map((c) => c.data.category)));
+  const allNotes = await getCollection("notes");
+  const categories = Array.from(new Set(allNotes.map((n) => n.data.category)));
   return categories.map((category) => ({
     params: { category: slugify(category) },
     props: { categoryName: category },
@@ -15,14 +15,19 @@ export async function getStaticPaths() {
 }
 
 const { categoryName } = Astro.props;
-const allConcepts = await getCollection("concepts");
-const inCategory = allConcepts.filter((c) => c.data.category === categoryName);
+const allNotes = await getCollection("notes");
+const inCategory = allNotes.filter((n) => n.data.category === categoryName);
+
+function latestDate(entries: { date: string }[]) {
+  const dates = entries.map((e) => e.date).filter(Boolean);
+  return dates.length ? dates.sort().at(-1)! : "";
+}
 
 const bySubcategory = new Map<string, typeof inCategory>();
-for (const c of inCategory) {
-  const key = c.data.subcategory || "—";
+for (const n of inCategory) {
+  const key = n.data.subcategory || "—";
   if (!bySubcategory.has(key)) bySubcategory.set(key, []);
-  bySubcategory.get(key)!.push(c);
+  bySubcategory.get(key)!.push(n);
 }
 const subcategories = Array.from(bySubcategory.keys()).sort();
 ---
@@ -38,7 +43,7 @@ const subcategories = Array.from(bySubcategory.keys()).sort();
       const items = bySubcategory
         .get(sub)!
         .slice()
-        .sort((a, b) => (a.data.date_learned < b.data.date_learned ? 1 : -1));
+        .sort((a, b) => (latestDate(a.data.entries) < latestDate(b.data.entries) ? 1 : -1));
       return (
         <section class="mb-8">
           <h2 class="mb-3 border-b border-border pb-1 text-lg font-semibold">
@@ -49,30 +54,32 @@ const subcategories = Array.from(bySubcategory.keys()).sort();
               <thead>
                 <tr>
                   <th class="border border-border bg-bg-softer px-2 py-1 text-left">
-                    <T k="concept_label" />
+                    <T k="note_label" />
                   </th>
                   <th class="border border-border bg-bg-softer px-2 py-1 text-left">
-                    <T k="difficulty_label" />
+                    <T k="tags_label" />
                   </th>
                   <th class="border border-border bg-bg-softer px-2 py-1 text-left">
-                    <T k="learned_on_label" />
+                    <T k="entries_count_label" />
                   </th>
                   <th class="border border-border bg-bg-softer px-2 py-1 text-left">
-                    <T k="status_label" />
+                    <T k="last_updated_label" />
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((c) => (
+                {items.map((n) => (
                   <tr>
                     <td class="border border-border px-2 py-1">
-                      <a href={`/concepts/${c.id}/`}>
-                        <NoteTitle tr={c.data.title} en={c.data.title_en} />
+                      <a href={`/notes/${n.id}/`}>
+                        <NoteTitle tr={n.data.title} en={n.data.title_en} />
                       </a>
                     </td>
-                    <td class="border border-border px-2 py-1">{c.data.difficulty || "—"}</td>
-                    <td class="border border-border px-2 py-1">{c.data.date_learned || "—"}</td>
-                    <td class="border border-border px-2 py-1">{c.data.status || "—"}</td>
+                    <td class="border border-border px-2 py-1">
+                      {n.data.tags.length > 0 ? n.data.tags.map((t) => `#${t}`).join(" ") : "—"}
+                    </td>
+                    <td class="border border-border px-2 py-1">{n.data.entries.length}</td>
+                    <td class="border border-border px-2 py-1">{latestDate(n.data.entries) || "—"}</td>
                   </tr>
                 ))}
               </tbody>

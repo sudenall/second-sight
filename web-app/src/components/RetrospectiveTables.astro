@@ -1,19 +1,21 @@
 ---
 import T from "./T.astro";
 
-interface ConceptRef {
-  slug: string;
-  title: string;
-  title_en: string;
+interface EntryRef {
+  noteSlug: string;
+  noteTitle: string;
+  noteTitleEn: string;
   category: string;
   subcategory: string;
-  date_learned: string;
-  last_reminded: string;
+  date: string;
+  label: string;
+  lastReminded: string;
+  headingSlug: string;
 }
 interface Props {
-  concepts: ConceptRef[];
+  entries: EntryRef[];
 }
-const { concepts } = Astro.props;
+const { entries } = Astro.props;
 ---
 
 <section class="card mb-6">
@@ -26,13 +28,13 @@ const { concepts } = Astro.props;
   <div id="monthly-retro-root" class="grid gap-4 sm:grid-cols-3"></div>
 </section>
 
-<script define:vars={{ concepts }}>
-  window.__ssConceptsForRetro = concepts;
+<script define:vars={{ entries }}>
+  window.__ssEntriesForRetro = entries;
 </script>
 <script>
   import { dict } from "../lib/i18n";
 
-  const concepts = window.__ssConceptsForRetro;
+  const entries = window.__ssEntriesForRetro;
   const MAX_PER_SUBCATEGORY = 10;
 
   function fmt(d) {
@@ -71,31 +73,36 @@ const { concepts } = Astro.props;
     return dateStr && dateStr >= start && dateStr <= end;
   }
 
-  function groupByCategory(periodConcepts) {
+  function groupByCategory(periodEntries) {
     const byCategory = {};
-    for (const c of periodConcepts) {
-      const cat = c.category || "—";
-      const sub = c.subcategory || "—";
+    for (const e of periodEntries) {
+      const cat = e.category || "—";
+      const sub = e.subcategory || "—";
       byCategory[cat] = byCategory[cat] || {};
       byCategory[cat][sub] = byCategory[cat][sub] || [];
-      byCategory[cat][sub].push(c);
+      byCategory[cat][sub].push(e);
     }
     return byCategory;
   }
 
-  function conceptLine(c, lang, reminded) {
+  function entryHref(e) {
+    return e.headingSlug ? `/notes/${e.noteSlug}/#${e.headingSlug}` : `/notes/${e.noteSlug}/`;
+  }
+
+  function entryLine(e, lang, reminded) {
     const div = document.createElement("div");
     div.className = reminded ? "opacity-50 text-sm" : "text-sm";
     if (reminded) div.appendChild(document.createTextNode("✓ "));
     const a = document.createElement("a");
-    a.href = `/concepts/${c.slug}/`;
-    a.textContent = lang === "en" && c.title_en ? c.title_en : c.title;
+    a.href = entryHref(e);
+    const title = lang === "en" && e.noteTitleEn ? e.noteTitleEn : e.noteTitle;
+    a.textContent = `${title} — ${e.label}`;
     div.appendChild(a);
     return div;
   }
 
-  function buildPeriodEl(periodConcepts, lang) {
-    if (periodConcepts.length === 0) {
+  function buildPeriodEl(periodEntries, lang) {
+    if (periodEntries.length === 0) {
       const p = document.createElement("p");
       p.className = "text-xs text-ink-faint";
       p.textContent = dict.empty_no_concepts[lang];
@@ -103,7 +110,7 @@ const { concepts } = Astro.props;
     }
 
     const wrap = document.createElement("div");
-    const byCategory = groupByCategory(periodConcepts);
+    const byCategory = groupByCategory(periodEntries);
 
     for (const cat of Object.keys(byCategory).sort()) {
       const subMap = byCategory[cat];
@@ -116,7 +123,7 @@ const { concepts } = Astro.props;
       catDetails.appendChild(catSummary);
 
       for (const sub of Object.keys(subMap).sort()) {
-        const list = subMap[sub].slice().sort((a, b) => (a.date_learned < b.date_learned ? 1 : -1));
+        const list = subMap[sub].slice().sort((a, b) => (a.date < b.date ? 1 : -1));
         const subDetails = document.createElement("details");
         subDetails.className = "ml-3 mt-1";
         const subSummary = document.createElement("summary");
@@ -125,18 +132,18 @@ const { concepts } = Astro.props;
         subDetails.appendChild(subSummary);
 
         const shown = list.slice(0, MAX_PER_SUBCATEGORY);
-        const notReminded = shown.filter((c) => !c.last_reminded);
-        const reminded = shown.filter((c) => c.last_reminded);
+        const notReminded = shown.filter((e) => !e.lastReminded);
+        const reminded = shown.filter((e) => e.lastReminded);
 
         const listWrap = document.createElement("div");
         listWrap.className = "ml-3 mt-1 space-y-0.5";
-        for (const c of notReminded) listWrap.appendChild(conceptLine(c, lang, false));
+        for (const e of notReminded) listWrap.appendChild(entryLine(e, lang, false));
         if (notReminded.length > 0 && reminded.length > 0) {
           const hr = document.createElement("hr");
           hr.className = "my-1 border-border";
           listWrap.appendChild(hr);
         }
-        for (const c of reminded) listWrap.appendChild(conceptLine(c, lang, true));
+        for (const e of reminded) listWrap.appendChild(entryLine(e, lang, true));
 
         if (list.length > MAX_PER_SUBCATEGORY) {
           const more = document.createElement("p");
@@ -163,13 +170,13 @@ const { concepts } = Astro.props;
     if (!root) return;
     root.innerHTML = "";
     ranges.forEach(([start, end], i) => {
-      const periodConcepts = concepts.filter((c) => inRange(c.date_learned, start, end));
+      const periodEntries = entries.filter((e) => inRange(e.date, start, end));
       const col = document.createElement("div");
       const heading = document.createElement("p");
       heading.className = "mb-2 text-sm font-semibold text-ink";
-      heading.textContent = `${dict[labelKeys[i]][lang]} (${periodConcepts.length})`;
+      heading.textContent = `${dict[labelKeys[i]][lang]} (${periodEntries.length})`;
       col.appendChild(heading);
-      col.appendChild(buildPeriodEl(periodConcepts, lang));
+      col.appendChild(buildPeriodEl(periodEntries, lang));
       root.appendChild(col);
     });
   }
