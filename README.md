@@ -121,7 +121,7 @@ folder):
 
 | Repo | Git directory | Content | Visibility |
 |---|---|---|---|
-| `second-sight` (this repo) | `.git-public` | `Reminders/Home.md`, `README.md`, `SCHEDULING.md`, `sync.ps1`, `.gitignore` | Public |
+| `second-sight` (this repo) | `.git-public` | `Reminders/Home.md`, `README.md`, `SCHEDULING.md`, `sync.ps1`, `web-app/`, `installer/`, `.gitignore` | Public |
 | `second-sight-vault` | `.git-private` | `Notes/`, `_staging/`, `_manifest.json`, `_index/` | Private |
 
 The vault's folder structure stays exactly as specified, as one single
@@ -154,5 +154,7 @@ which repo — the script handles that automatically via the `publicPaths` /
 ## Status
 
 The folder structure, index/manifest skeletons, and dashboard are set up,
-and Layer C is live — processing real pinned chats into topic notes. The
-web interface phase hasn't started yet.
+and Layer C is live — processing real pinned chats into topic notes. A web
+interface (`web-app/`) has also been built, with deployment steps documented
+in [`web-app/README-DEPLOY.md`](web-app/README-DEPLOY.md) and
+[`installer/SETUP-GUIDE.md`](installer/SETUP-GUIDE.md).

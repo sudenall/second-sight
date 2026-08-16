@@ -11,6 +11,24 @@ You don't need every step. Steps 1–2 give you a working local system
 (Obsidian only). Steps 3–5 are only needed if you also want a hosted web
 view.
 
+## Before you start
+
+You'll need:
+
+- **Windows, or PowerShell installed on macOS/Linux** (as `pwsh`) — the
+  installer (`install.ps1`) is a PowerShell script.
+- **Obsidian**, with the **Dataview** community plugin installed — the
+  dashboard depends on it.
+- **A claude.ai account**, with **Cowork/Routines** available on it (check
+  your plan tier — see the note in Step 2).
+- *(Only if you want a hosted web view, Steps 3–5)* a **GitHub** account
+  and a **Cloudflare** account.
+
+And one action, before any of the steps below: **pin the claude.ai
+conversations** you want this system to pick up. Cowork only scans chats
+you've pinned — anything unpinned is invisible to it, no matter how the
+routine below is set up.
+
 ## Step 1 — Run the installer
 
 1. Download or clone this repo somewhere on your machine.
@@ -37,6 +55,12 @@ Answering "n" leaves everything untouched.
 
 This is what actually pulls content out of your pinned claude.ai chats
 on a schedule, so you don't have to run anything by hand.
+
+> **Plan tier note:** Cowork/Routines availability depends on your
+> claude.ai plan — check your account settings to confirm you have access
+> before relying on this step. If it's not available on your plan, you can
+> still run the same prompt manually from time to time instead of on a
+> schedule.
 
 1. In Claude, go to the Cowork/Routines settings for your account and
    create a new scheduled routine (weekly is reasonable — pinned chats
@@ -97,12 +121,15 @@ instead of one:
    git --git-dir=.git-private init
    git --git-dir=.git-private remote add origin https://github.com/<you>/second-sight-vault.git
    ```
-3. Write a small sync script that stages a different explicit file list
-   for each repo (public: dashboard, install scripts, docs; private:
-   `Notes/`, `_staging/`, `_index/`, `_manifest.json`) and commits +
-   pushes each one with `git --git-dir=<dir> --work-tree=. ...`. Explicit
-   path lists matter here — `git add -A` on either repo would leak files
-   meant for the other one.
+3. Copy `sync.ps1` from the root of this repo into your vault folder, and
+   edit its `$publicPaths` / `$privatePaths` lists at the top to match your
+   own folder names. It already does the right thing: stages a different
+   explicit file list for each repo (public: dashboard, install scripts,
+   docs; private: `Notes/`, `_staging/`, `_index/`, `_manifest.json`) and
+   commits + pushes each one with `git --git-dir=<dir> --work-tree=. ...`.
+   You don't need to write this from scratch — just adapt the path lists.
+   Explicit path lists matter here — `git add -A` on either repo would leak
+   files meant for the other one.
 4. Add a `.gitignore` at the vault root with at least `.obsidian/` in it
    (Obsidian's local app state shouldn't be tracked by either repo).
 
@@ -148,7 +175,7 @@ npx wrangler deploy expects a wrangler.jsonc, but none was found
 ```jsonc
 {
   "name": "second-sight",
-  "compatibility_date": "2026-08-15",  // use today's date
+  "compatibility_date": "REPLACE-WITH-TODAYS-DATE",  // format: YYYY-MM-DD
   "assets": { "directory": "./dist" }
 }
 ```

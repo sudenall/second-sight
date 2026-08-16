@@ -1,13 +1,13 @@
 <#
-Second Sight - iki bagimsiz git deposunu (public/private) tek komutla
-senkronize eder. Ayni klasor iki ayri .git dizini tarafindan izlenir:
-  .git-public  -> altyapi/kod (sablonlar, dashboard, README, script)
-  .git-private -> gercek notlar (Notes, Sessions, Concepts, Weekly-Summaries,
+Second Sight - syncs two independent git repos (public/private) with one
+command. The same folder is tracked by two separate .git directories:
+  .git-public  -> infra/code (templates, dashboard, README, script)
+  .git-private -> actual notes (Notes, Sessions, Concepts, Weekly-Summaries,
                    _staging, _manifest.json, _index, _ogrenme-tercihlerim.md)
 
-Kullanim:
+Usage:
   powershell -File sync.ps1
-  powershell -File sync.ps1 -Message "Haftalik guncelleme"
+  powershell -File sync.ps1 -Message "Weekly update"
 #>
 
 param(
@@ -52,7 +52,7 @@ function Sync-Repo {
 
     $existing = $Paths | Where-Object { Test-Path (Join-Path $root $_) }
     if ($existing.Count -eq 0) {
-        Write-Host "  Izlenecek yol bulunamadi, atlaniyor." -ForegroundColor Yellow
+        Write-Host "  No tracked paths found, skipping." -ForegroundColor Yellow
         return
     }
 
@@ -60,7 +60,7 @@ function Sync-Repo {
 
     & git --git-dir="$root\$GitDir" --work-tree="$root" diff --cached --quiet
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "  Degisiklik yok." -ForegroundColor DarkGray
+        Write-Host "  No changes." -ForegroundColor DarkGray
         return
     }
 
@@ -68,11 +68,11 @@ function Sync-Repo {
 
     & git --git-dir="$root\$GitDir" --work-tree="$root" push
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "  Commit tamam, ama push basarisiz (remote yok/hata). Manuel push gerekebilir." -ForegroundColor Yellow
+        Write-Host "  Commit done, but push failed (no remote / error). Manual push may be needed." -ForegroundColor Yellow
         return
     }
 
-    Write-Host "  Commit + push tamamlandi." -ForegroundColor Green
+    Write-Host "  Commit + push completed." -ForegroundColor Green
 }
 
 # Private once, Public second - deliberately in this order. Cloudflare

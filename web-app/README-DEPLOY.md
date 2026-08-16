@@ -109,7 +109,7 @@ e-postana gelir.
 7. **Add policy** (bir sonraki ekranda):
    - **Policy name**: `Sadece ben`.
    - **Action**: `Allow`.
-   - **Include** kuralı: **Emails** seç, `irlandasude@gmail.com` yaz.
+   - **Include** kuralı: **Emails** seç, kendi e-posta adresini yaz.
 8. **Save**.
 
 Bundan sonra siteye giren herkes önce Cloudflare'ın giriş sayfasını

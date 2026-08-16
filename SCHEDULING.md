@@ -1,57 +1,61 @@
-# Zamanlama Talimatları
+# Scheduling Instructions
 
-Bu doküman sadece talimat verir — hiçbir görev bu repo kurulumu sırasında
-otomatik olarak Windows Task Scheduler'a eklenmedi. Aşağıdaki adımları ne
-zaman hazır olursan o zaman uygula.
+This document only gives instructions — no task was automatically added
+to Windows Task Scheduler during this repo's setup. Apply the steps
+below whenever you're ready to.
 
-Pinli sohbet sayısı günlük büyük değişmeyeceği için tüm taramayı (Katman
-A-C) **haftalık** çalıştırmak öneriliyor.
+Since the number of pinned chats won't change much day to day, running
+the whole scan (Layers A-C) **weekly** is recommended.
 
-## 1. Katman A/B (Claude Cowork) — otomatikleştirilemez, haftalık hatırlatma öner
+## 1. Layers A/B (Claude Cowork) — can't be automated, set a weekly reminder instead
 
-Claude Cowork ile claude.ai'deki pinli sohbetleri tarama adımı interaktif bir
-AI oturumu gerektirdiği için (tarayıcı + hesap girişi), işletim sistemi
-seviyesinde tam otomatik zamanlanamaz. Bunun yerine:
+Because the step that scans pinned chats on claude.ai via Claude Cowork
+requires an interactive AI session (browser + account login), it can't
+be fully automated at the operating-system level. Instead:
 
-- Windows'ta bir hatırlatma kur: **Ayarlar → Saat ve Dil → Alarmlar ve Saat**
-  uygulaması ya da Outlook/Google Takvim'de haftalık tekrarlayan bir hatırlatma
-  ("Second Sight: pinli sohbetleri tara") oluştur.
-- Bu adımı tamamladığında Cowork, farkları `_staging/`'e yazacak.
+- Set up a reminder in Windows: use **Settings → Time & Language →
+  Alarms & Clock**, or create a weekly recurring reminder in
+  Outlook/Google Calendar ("Second Sight: scan pinned chats").
+- Once you complete this step, Cowork will write the differences to
+  `_staging/`.
 
-## 2. Katman C (Claude Code) — Task Scheduler ile otomatikleştirilebilir
+## 2. Layer C (Claude Code) — can be automated with Task Scheduler
 
-`_staging/` klasöründe dosya birikince, Claude Code CLI'ı başsız (headless)
-modda çalıştırarak Katman C'yi otomatik tetikleyebilirsin:
+Once files pile up in `_staging/`, you can automatically trigger Layer C
+by running the Claude Code CLI in headless mode:
 
-1. **Görev Zamanlayıcı**'yı aç (Win+R → `taskschd.msc`).
-2. Sağ panelden **Temel Görev Oluştur...** seç.
-3. İsim: `Second Sight - Katman C`.
-4. Tetikleyici: **Haftalık**, istediğin gün/saat (örn. Pazartesi 09:00).
-5. Eylem: **Bir program başlat**.
-6. Program/script: `claude` (veya `claude.exe`'nin tam yolu, `where claude`
-   ile bulunabilir).
-7. Argümanlar: `SCHEDULING\katman-c-prompt.txt` dosyasının içeriğini aç,
-   kopyala, `-p "..."` içine yapıştır (tırnak işaretlerini kaçırmayı
-   unutma). Bu dosya, prompt'un tek kaynağı — değiştirmek istersen sadece
-   orayı güncelle, buradaki talimat hep aynı kalır.
-8. Başlangıç dizini (Start in): `D:\Vaults For Obsidian\second-brain-for-sude`
-9. Kaydet.
+1. Open **Task Scheduler** (Win+R → `taskschd.msc`).
+2. From the right-hand panel, choose **Create Basic Task...**.
+3. Name: `Second Sight - Layer C`.
+4. Trigger: **Weekly**, on whichever day/time you prefer (e.g. Monday
+   09:00).
+5. Action: **Start a program**.
+6. Program/script: `claude` (or the full path to `claude.exe`, which you
+   can find with `where claude`).
+7. Arguments: open the contents of `SCHEDULING\katman-c-prompt.txt`, copy
+   it, and paste it inside `-p "..."` (don't forget to escape the quote
+   characters). This file is the single source of truth for the prompt —
+   if you want to change it, update only that file; the instruction here
+   always stays the same.
+8. Start in: `D:\Vaults For Obsidian\second-brain-for-sude`
+9. Save.
 
-> Not: `-p` (print/headless mod) Claude Code'u interaktif olmadan çalıştırır.
-> İlk birkaç çalıştırmayı manuel tetikleyip çıktısını kontrol etmeden tam
-> otomatiğe bağlamanı önermeyiz.
+> Note: `-p` (print/headless mode) runs Claude Code without an
+> interactive session. We recommend triggering the first few runs
+> manually and checking the output before wiring it up to run fully
+> unattended.
 
-## 3. Git senkronu — Task Scheduler ile otomatikleştirilebilir
+## 3. Git sync — can be automated with Task Scheduler
 
-Katman C görevinin hemen ardından `sync.ps1`'i çalıştıracak ikinci bir adım
-(ya da aynı görevin ikinci eylemi) eklenebilir:
+A second step (or a second action on the same task) can be added right
+after the Layer C task to run `sync.ps1`:
 
 - Program/script: `powershell.exe`
-- Argümanlar:
+- Arguments:
   ```
   -NoProfile -ExecutionPolicy Bypass -File "D:\Vaults For Obsidian\second-brain-for-sude\sync.ps1"
   ```
 
-Bu şekilde: sen sadece haftada bir Cowork ile sohbetleri tarıyorsun, geri
-kalan her şey (kategorize, dashboard güncelleme, git commit/push) otomatik
-akıyor.
+This way: you only scan chats with Cowork once a week, and everything
+else (categorizing, updating the dashboard, git commit/push) flows
+automatically.
