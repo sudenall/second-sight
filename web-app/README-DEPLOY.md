@@ -6,12 +6,14 @@ Aşağıdaki adımları Cloudflare panelinden sen elle uygulayacaksın.
 ## Genel Mimari
 
 Bu web app `second-sight` (public) reposunun `/web-app/` alt klasöründe
-yaşıyor. Build sırasında `Sessions/`, `Concepts/`, `Weekly-Summaries/`,
-`_index/` klasörlerini okuması gerekiyor — ama bunlar `second-sight-vault`
-(private) reposunda. Yerelde bu sorun yok çünkü ikisi aynı klasörü
-paylaşıyor; Cloudflare'ın build ortamında ise sadece public repo klonlanır,
-bu yüzden build script'i private repo'yu AYRICA, salt-okunur bir token ile
-klonlayıp ondan sonra `astro build`'i çalıştırıyor.
+yaşıyor. Build sırasında `Notes/` (v2 konu notları — her not, frontmatter'da
+tarihli bir `entries[]` listesi taşıyor), `Weekly-Summaries/`, `_index/`
+(içinde `topics.json`, `categories.json`, `tags.json`) klasörlerini okuması
+gerekiyor — ama bunlar `second-sight-vault` (private) reposunda. Yerelde bu
+sorun yok çünkü ikisi aynı klasörü paylaşıyor; Cloudflare'ın build
+ortamında ise sadece public repo klonlanır, bu yüzden build script'i
+private repo'yu AYRICA, salt-okunur bir token ile klonlayıp ondan sonra
+`astro build`'i çalıştırıyor.
 
 ```
 Cloudflare build adımları:
@@ -98,13 +100,20 @@ yukarıda izin verdiğin adres içeri girebilecek.
   (gizli sekmede/farklı bir tarayıcıda) git, e-posta ile giriş yapmayı
   dene, ana sayfanın Obsidian'daki Home.md ile aynı bilgiyi gösterdiğini
   kontrol et.
-- İçerik güncellemesi (yeni sohbet işlendiğinde) otomatik yayınlanmaz —
+- İçerik güncellemesi (yeni sohbet işlendiğinde) otomatik yayınlanır.
   Cloudflare Pages sadece **public repo'ya push geldiğinde** yeniden build
-  alır. `sync.ps1` her çalıştığında public repo değişmiyorsa (genelde
-  değişmez, çünkü gerçek notlar private repo'da) yeni build TETİKLENMEZ.
-  Bunu nasıl otomatikleştireceğimiz (örn. Cloudflare'ın "Deploy Hook"
-  URL'sini `sync.ps1`'in sonuna eklemek) ayrı bir adım — deploy onaylandıktan
-  sonra konuşuruz.
+  alıyor, ve Katman C normalde sadece private repo'yu (`Notes/`, `_index/`)
+  değiştirdiği için public repo'da commit edilecek bir şey olmuyordu — bu
+  yüzden `SCHEDULING/katman-c-prompt.txt`'ye bir "DEPLOY TETİKLEYİCİ ADIMI"
+  eklendi: Katman C gerçekten bir staging dosyası işlediyse,
+  `SCHEDULING/last-content-update.txt` dosyasına o anki zaman damgasını
+  yazıp sync.ps1'i çalıştırıyor. `sync.ps1` de bilerek önce **private**'ı
+  sonra **public**'i push edecek şekilde sıralandı — bu sıra kritik, çünkü
+  Cloudflare'ın build script'i private vault'u klonlarken onun remote'da
+  zaten güncel olması gerekiyor (public push'un tetiklediği build,
+  private'ın henüz yüklenmemiş bir haline değil, en güncel haline
+  bakmalı). Staging klasörü boşsa (işlenecek yeni içerik yoksa) bu adım
+  atlanıyor, gereksiz bir rebuild tetiklenmiyor.
 
 ## Yerel Geliştirme (hatırlatma)
 
