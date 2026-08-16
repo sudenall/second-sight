@@ -21,7 +21,7 @@ Cloudflare build adımları:
 2. second-sight-vault (private) repo,    → vault-data/ olarak ayrıca klonlanır
    salt-okunur bir GitHub token'ıyla
 3. VAULT_DATA_DIR=vault-data ile astro build çalıştırılır
-4. web-app/dist/ statik çıktısı Cloudflare Pages'e yüklenir
+4. web-app/dist/ statik çıktısı npx wrangler deploy ile Cloudflare'a yayınlanır
 ```
 
 ## 1. Salt-Okunur GitHub Token Oluştur (private repo'yu klonlamak için)
@@ -40,28 +40,50 @@ Cloudflare build adımları:
 8. **Generate token** → gösterilen token'ı hemen kopyala (bir daha
    gösterilmiyor). Bunu bir sonraki adımda kullanacaksın.
 
-## 2. Cloudflare Pages Projesi Oluştur
+## 2. Cloudflare Worker Projesi Oluştur
+
+Cloudflare'ın klasik "Pages" ürünü değil, daha yeni **"Create a
+Worker" → Connect to Git** akışı kullanılıyor (statik site,
+Workers-with-static-assets olarak deploy ediliyor). Aşağıdaki ayarlar,
+gerçek denemede karşılaşılan 3 hatanın (aşağıda ayrıca not edildi)
+düzeltilmiş, çalışan hali.
 
 1. [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages**
-   → **Create** → **Pages** → **Connect to Git**.
+   → **Create** → **Create a Worker** → **Connect to Git**.
 2. GitHub hesabını bağla (istenirse), **second-sight** reposunu seç.
 3. **Production branch**: `main`.
-4. **Framework preset**: "None" bırak (custom build komutu kullanacağız).
-5. **Root directory (Advanced)**: boş bırak / `/` (repo kökü) — build
-   komutu zaten `web-app/` alt klasörüne kendisi giriyor.
-6. **Build command** alanına aşağıdakini birebir yapıştır:
+4. **Root directory**: `/web-app` — bu ÖNEMLİ, build komutu Cloudflare
+   tarafından zaten bu klasörün İÇİNDEN çalıştırılıyor (aşağıdaki build
+   komutu bunu varsayıyor, tekrar `cd web-app` YAPMIYOR).
+5. `web-app/wrangler.jsonc` repo'da mevcut olmalı (zaten var):
+   ```jsonc
+   {
+     "name": "second-sight",
+     "compatibility_date": "2026-08-15",
+     "assets": { "directory": "./dist" }
+   }
    ```
-   git clone --depth 1 https://x-access-token:$VAULT_REPO_TOKEN@github.com/sudenall/second-sight-vault.git vault-data && cd web-app && npm install && VAULT_DATA_DIR=$(pwd)/../vault-data npm run build
+6. **Build command** alanına aşağıdakini birebir yapıştır (BOŞ
+   BIRAKMA — görünüşte optional/loading gösterse de zorunlu, boş
+   bırakılırsa "wrangler.jsonc bekleniyor ama yok" hatası alınır):
    ```
-7. **Build output directory**: `web-app/dist`
-8. **Environment variables (before deploying)** bölümünü aç, iki değişken
+   git clone --depth 1 https://x-access-token:$VAULT_REPO_TOKEN@github.com/sudenall/second-sight-vault.git vault-data && npm install && VAULT_DATA_DIR=$(pwd)/vault-data npm run build && npx wrangler deploy
+   ```
+   Dikkat: Root directory zaten `/web-app` olduğu için komutun başında
+   `cd web-app &&` YOK — eklenirse "cd: can't cd to web-app" hatası
+   alınır (zaten o klasördesin). `VAULT_DATA_DIR` de `$(pwd)/vault-data`
+   olmalı, `$(pwd)/../vault-data` DEĞİL — clone zaten `web-app/`'ın
+   içine (`web-app/vault-data`) oluyor, bir üst dizine çıkmak yanlış
+   yere işaret eder (build "başarılı" görünür ama Astro `Concepts/
+   klasörü bulunamadı` gibi uyarılarla boş içerik üretir).
+7. **Environment variables (before deploying)** bölümünü aç, iki değişken
    ekle:
    - `VAULT_REPO_TOKEN` = (1. adımda kopyaladığın token) → sağdaki kalem/
      göz simgesinden **Encrypt** işaretle (bu, secret alanı yapar, panelde
      bir daha düz metin görünmez).
    - `NODE_VERSION` = `22` (Astro 5 için güncel bir Node sürümü garanti
      eder; Cloudflare'ın varsayılanı farklı olabilir).
-9. **Save and Deploy**.
+8. **Save and Deploy**.
 
 İlk build birkaç dakika sürebilir. Bittiğinde Cloudflare sana
 `second-sight.pages.dev` gibi (proje adına göre değişen) bir link verecek

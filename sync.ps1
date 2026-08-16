@@ -24,7 +24,8 @@ $publicPaths = @(
     "SCHEDULING\last-content-update.txt",
     "sync.ps1",
     ".gitignore",
-    "web-app"
+    "web-app",
+    "installer"
 )
 
 $privatePaths = @(
