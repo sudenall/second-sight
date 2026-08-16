@@ -110,6 +110,18 @@ tutulur - {"konu-anahtari": "Notes/dosya-adi.md"}. Yeni sohbet işlenirken
 (yeni not açılmaz). Eşleşme yoksa yeni not + yeni indeks kaydı
 oluşturulur.
 
+İLİŞKİLENDİRME KURALI: Bir notun içinde başka bir konudan bahsedilirse
+(örn. "Lost-in-the-Middle reposundaki context hoisting mantığı"), bu düz
+metin atıf değil, gerçek bir [[Not-Adı]] wikilink olmalı - eğer o konu
+için zaten bir not varsa (topics.json'da kontrol et). Yeni bir not
+işlenirken/güncellenirken, hem yeni notun hem bahsedilen mevcut notun
+içine (varsa, uygun yerine) karşılıklı wikilink eklenir - iki yönlü
+bağlantı, sadece tek taraflı değil. Wikilink hedefi dosya adı (uzantısız,
+`Notes/` öneki olmadan) olmalı, örn. `[[Lost-in-the-Middle]]`; başlık dışı
+bir alt bölüme atıf yapılıyorsa `[[Lost-in-the-Middle#Anchor]]` de
+kullanılabilir. Bu, hem Obsidian graph view'ının anlamlı kalması hem de
+notlar arası gerçek gezinme için gerekli.
+
 DOSYA SONUNDA AYRI İNGİLİZCE ÇEVİRİ: Tüm gövdenin (tüm girdilerin) ayrı,
 tam İngilizce çevirisi, dosya sonuna "---\n## English Version" ayracıyla
 eklenir - gelecekteki web TR/EN toggle için.
