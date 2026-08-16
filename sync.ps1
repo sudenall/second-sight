@@ -21,6 +21,7 @@ $publicPaths = @(
     "README.md",
     "SCHEDULING.md",
     "SCHEDULING\katman-c-prompt.txt",
+    "SCHEDULING\last-content-update.txt",
     "sync.ps1",
     ".gitignore",
     "web-app"
@@ -73,5 +74,13 @@ function Sync-Repo {
     Write-Host "  Commit + push tamamlandi." -ForegroundColor Green
 }
 
-Sync-Repo -GitDir ".git-public"  -Label "Public (second-sight)"       -Paths $publicPaths
+# Private once, Public second - deliberately in this order. Cloudflare
+# Pages watches the PUBLIC repo for pushes and, on trigger, clones the
+# PRIVATE vault repo fresh to pull in content (see web-app/README-DEPLOY.md
+# and src/lib/vault-dir.mjs). If Public pushed first, a build could kick
+# off and clone Private before its new content actually landed on the
+# remote, shipping a stale site. Pushing Private first guarantees Private's
+# remote is already up to date by the time Public's push (and therefore
+# Cloudflare's build) happens.
 Sync-Repo -GitDir ".git-private" -Label "Private (second-sight-vault)" -Paths $privatePaths
+Sync-Repo -GitDir ".git-public"  -Label "Public (second-sight)"       -Paths $publicPaths

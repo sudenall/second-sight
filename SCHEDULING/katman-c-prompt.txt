@@ -8,10 +8,35 @@ KURALI'na (v2) göre yeni bir konu notu oluştur ve topics.json'a kaydet.
 Ayrı session notu üretilmez - tüm bilgi konu notunun içindeki girdilerde
 tutulur. Yeni girdinin last_reminded alanını boş bırak, _manifest.json'da
 last_processed alanlarını güncelle, işlenen staging dosyalarını sil.
-İşlem bitince sync.ps1'i "Layer C: automated weekly processing -
-[date]" mesajıyla çalıştır. Hiçbir adımda kullanıcı onayı bekleme, tüm
-kararları kendin ver, sonunda kısa bir özet raporu
+İşlem bitince, eğer bu çalıştırmada en az bir staging dosyası gerçekten
+işlendiyse (yani Notes/'ta gerçek bir değişiklik oluştuysa),
+DEPLOY TETİKLEYİCİ ADIMI'nı uygula (aşağıda ayrıca tanımlı), sonra
+sync.ps1'i "Layer C: automated weekly processing - [date]" mesajıyla
+çalıştır. Eğer staging klasörü zaten boştu ve hiçbir dosya işlenmediyse,
+deploy tetikleyici adımını ATLA (gereksiz bir Cloudflare rebuild'i
+tetiklenmesin) ama yine de sync.ps1'i çalıştır (başka bekleyen bir
+değişiklik varsa diye zararsızdır, private tarafta değişiklik yoksa
+zaten "Değişiklik yok" deyip atlar). Hiçbir adımda kullanıcı onayı
+bekleme, tüm kararları kendin ver, sonunda kısa bir özet raporu
 SCHEDULING/son-calisma-raporu.md dosyasına yaz.
+
+DEPLOY TETİKLEYİCİ ADIMI: Cloudflare Pages, deploy'ları PUBLIC repo'daki
+(second-sight) push'ları izleyerek tetikliyor ve build sırasında PRIVATE
+vault repo'yu (second-sight-vault) ayrıca klonluyor. Katman C'nin normal
+çalışması sadece private repo'yu (Notes/, _index/, _manifest.json)
+değiştirdiği için, public repo'da commit edilecek bir şey olmuyor ve
+Cloudflare hiç tetiklenmiyor - yeni içerik push edilmiş olsa bile site
+güncellenmiyor. Bunu çözmek için: sync.ps1'i çağırmadan HEMEN ÖNCE,
+SCHEDULING/last-content-update.txt dosyasının içeriğini o anki ISO 8601
+zaman damgasıyla (örn. 2026-08-16T14:32:00) güncelle - bu, public repo'da
+her gerçek içerik güncellemesinde küçük, zararsız bir değişiklik olmasını
+sağlayan kasıtlı bir tetikleyici dosya. sync.ps1 zaten önce private'ı
+sonra public'i push edecek şekilde sıralı (bu sırayı DEĞİŞTİRME/bozma -
+private'ın remote'a gerçekten ulaşmış olması, Cloudflare public push'u
+görüp build başlattığında private vault'un klonlanan hali güncel olsun
+diye kritik). Yani akış: staging işle → last-content-update.txt'i
+güncelle → sync.ps1'i tek seferde çalıştır (private push, sonra public
+push, sonra Cloudflare otomatik build/deploy alır).
 
 ÜSLUP KURALI: Her concept/session notu alanı (Kavram Nedir, Ne Sordum,
 Nerede Zorlandım, Netleşen Sonuç, Oturum Özeti), birbirine kopuk
