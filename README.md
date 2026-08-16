@@ -6,12 +6,12 @@ A personal "second brain" system that turns knowledge learned from pinned
 chats on claude.ai into a categorized, relational Obsidian knowledge base
 (and eventually a web interface).
 
-> This repo contains **infrastructure only**: templates, the dashboard
-> script, the sync tool, and documentation. The actual note content
-> (Sessions/, Concepts/, Weekly-Summaries/, `_staging/`, `_manifest.json`,
-> `_index/`) is intentionally not here — it lives in a separate **private**
-> repo. See the [Public/private repo split](#publicprivate-repo-split)
-> section for details.
+> This repo contains **infrastructure only**: the dashboard script, the sync
+> tool, and documentation. The actual note content (`Notes/`, `_staging/`,
+> `_manifest.json`, `_index/`) is intentionally not here — it lives in a
+> separate **private** repo. See the
+> [Public/private repo split](#publicprivate-repo-split) section for
+> details.
 
 ## Problem it solves
 
@@ -37,8 +37,9 @@ pinned claude.ai chats
         │  (Claude Code)
         ▼
    Layer C: Categorize + relate
-   (fast matching via _index/*.json, generates Session+Concept notes,
-    updates manifest/index, deletes the staging file)
+   (fast matching via _index/*.json, appends a dated entry to an existing
+    topic note or creates a new one, updates manifest/index, deletes the
+    staging file)
         ▼
    Layer D: Dashboard (Reminders/Home.md)
    (Dataview/DataviewJS, fully local, no AI calls)
@@ -61,31 +62,47 @@ for the format details.
 
 ### Layer C — Categorize + relate
 
-For each file in `_staging/`, `_index/categories.json` and
-`_index/tags.json` are checked first (the whole vault isn't scanned); if a
-match with an existing note is found, `related` fields are linked
-bidirectionally. Session + Concept notes are generated, and
-`review_due = date_learned + 3 days` is calculated. Once done, the
-manifest/index is updated and the processed `_staging` file is deleted.
+The unit of knowledge is a **topic**, not an individual concept. A pinned
+chat usually produces a single topic note under `Notes/` (e.g. `MCP.md`,
+`Cache-Stampede.md`); it only gets split into multiple notes if the chat
+genuinely covers two or three disconnected, unrelated topics.
+
+For each file in `_staging/`, `_index/topics.json` (a
+`{"topic-key": "Notes/File-Name.md"}` lookup) is checked first — if the
+chat matches an existing topic note, a new **dated entry** is appended
+inside that note rather than creating a new file; if there's no match, a
+new topic note is created and registered in `topics.json`. No separate
+session note is produced — all knowledge lives inside the topic note's
+entries.
+
+Each entry is its own `## [Date] — [Short Label]` heading inside the note,
+tracked in the frontmatter's `entries` list (`date`, `label`, `anchor`,
+`review_due` = `date + 3 days`, `last_reminded`). The `anchor` field is the
+heading's literal text (not a slug), matching how Obsidian's
+`[[Note#Heading]]` link syntax actually resolves. The note's body is
+Turkish, followed by a full English translation appended after a
+`---\n## English Version` separator, for a future web TR/EN toggle.
 
 **Two-tier categorization**: `category` (a broad top-level heading, e.g.
 "AI Certified Architect") and `subcategory` (more specific, under that
-top-level heading, e.g. "Claude Developer Platform"). Both form a flexible,
-growing taxonomy — in `_index/categories.json`, each `category` carries its
-own `subcategories` list. If none of the existing ones fit (whether
-category or subcategory), approval is requested before adding a new one.
+top-level heading, e.g. "Claude Developer Platform"), tracked in
+`_index/categories.json` — each `category` carries its own `subcategories`
+list. If none of the existing ones fit, approval is requested before adding
+a new one.
 
 Completeness rule: every distinct learning unit that appears in a chat
 (concept, technique/method, architectural decision, problem, solution,
-corrected misunderstanding, comparison/trade-off) is a candidate for its
-own concept note. Nothing is skipped just because it seems minor; at most
-two small, closely related sub-concepts may be merged into a single note.
+corrected misunderstanding, comparison/trade-off) becomes its own entry —
+nothing is skipped just because it seems minor, and any gaps caused by
+extraction limitations (missing pagination, an interrupted response) are
+noted explicitly rather than silently dropped.
 
 ### Layer D — Dashboard
 
-`Reminders/Home.md` computes category-based tables and the weekly reminder
-table using Dataview/DataviewJS. Set up once, it then runs automatically
-and for free every time Obsidian opens.
+`Reminders/Home.md` computes category-based tables and the weekly/monthly
+reminder tables — entry by entry across every topic note's `entries` list —
+using Dataview/DataviewJS. Set up once, it then runs automatically and for
+free every time Obsidian opens.
 
 ## Cost-efficiency approach
 
@@ -104,8 +121,8 @@ folder):
 
 | Repo | Git directory | Content | Visibility |
 |---|---|---|---|
-| `second-sight` (this repo) | `.git-public` | `_templates/`, `Reminders/Home.md`, `README.md`, `SCHEDULING.md`, `sync.ps1`, `.gitignore` | Public |
-| `second-sight-vault` | `.git-private` | `Sessions/`, `Concepts/`, `Weekly-Summaries/`, `_staging/`, `_manifest.json`, `_index/` | Private |
+| `second-sight` (this repo) | `.git-public` | `Reminders/Home.md`, `README.md`, `SCHEDULING.md`, `sync.ps1`, `.gitignore` | Public |
+| `second-sight-vault` | `.git-private` | `Notes/`, `_staging/`, `_manifest.json`, `_index/` | Private |
 
 The vault's folder structure stays exactly as specified, as one single
 tree; only the git side keeps two separate histories.
@@ -126,8 +143,7 @@ which repo — the script handles that automatically via the `publicPaths` /
 
 ## Tools used
 
-- **Obsidian** — the vault, with the Dataview and Templater plugins
-  (already installed)
+- **Obsidian** — the vault, with the Dataview plugin (already installed)
 - **Claude Cowork** — pinned chat scanning (Layer A/B), triggered manually
   via the claude.ai account
 - **Claude Code** — categorize/relate (Layer C), processes staging files
@@ -137,6 +153,6 @@ which repo — the script handles that automatically via the `publicPaths` /
 
 ## Status
 
-The folder structure, templates, index/manifest skeletons, and dashboard
-are set up. The web interface phase hasn't started yet — Layer C is
-currently being tested with fictional sample data.
+The folder structure, index/manifest skeletons, and dashboard are set up,
+and Layer C is live — processing real pinned chats into topic notes. The
+web interface phase hasn't started yet.
