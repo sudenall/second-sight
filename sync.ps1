@@ -17,7 +17,6 @@ param(
 $root = $PSScriptRoot
 
 $publicPaths = @(
-    "_templates",
     "Reminders\Home.md",
     "README.md",
     "SCHEDULING.md",
