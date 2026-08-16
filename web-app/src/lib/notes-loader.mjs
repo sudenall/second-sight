@@ -1,7 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 import { normalizeAnchorText } from "./normalize-anchor.mjs";
+
+// Astro's content-layer store requires filePath to be relative to the site
+// root (posix-separated) - an absolute path throws "File path must be
+// relative to the site root" in astro/dist/content/mutable-data-store.js.
+// That check only triggers on POSIX (an absolute path starts with "/"),
+// which is why passing the absolute path here built fine on Windows but
+// broke on Cloudflare's Linux build. Astro's own glob() loader does this
+// same relative conversion before calling store.set() (see
+// astro/dist/content/loaders/glob.js, posixRelative()).
+function toSiteRootRelative(root, absoluteFilePath) {
+  return path.relative(fileURLToPath(root), absoluteFilePath).split(path.sep).join("/");
+}
 
 // Custom Content Layer loader for Notes/*.md (the v2 "topic note + dated
 // entries" model). The stock glob() loader can't be used here because a
@@ -25,7 +38,7 @@ export function notesLoader({ base }) {
   return {
     name: "notes-loader",
     load: async (context) => {
-      const { store, logger, renderMarkdown, parseData, generateDigest, watcher } = context;
+      const { store, logger, renderMarkdown, parseData, generateDigest, watcher, config } = context;
       store.clear();
 
       const dir = base;
@@ -85,7 +98,7 @@ export function notesLoader({ base }) {
             entryAnchorMap,
           },
           body: trBody,
-          filePath,
+          filePath: toSiteRootRelative(config.root, filePath),
           digest,
           rendered: renderedTr,
         });
