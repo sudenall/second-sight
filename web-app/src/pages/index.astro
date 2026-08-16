@@ -4,6 +4,7 @@ import Layout from "../components/Layout.astro";
 import DailyReminders from "../components/DailyReminders.astro";
 import RetrospectiveTables from "../components/RetrospectiveTables.astro";
 import T from "../components/T.astro";
+import { t } from "../lib/i18n";
 import { slugify } from "../lib/slug";
 import { flattenNoteEntries } from "../lib/flatten-entries";
 
@@ -11,10 +12,53 @@ const allNotes = await getCollection("notes");
 const entries = flattenNoteEntries(allNotes);
 
 const categories = Array.from(new Set(allNotes.map((n) => n.data.category))).sort();
+
+const searchItems = allNotes.map((n) => ({
+  slug: n.id,
+  title: n.data.title,
+  titleEn: n.data.title_en,
+  category: n.data.category,
+  subcategory: n.data.subcategory,
+  tags: n.data.tags,
+}));
 ---
 
 <Layout title="Ana Sayfa">
   <DailyReminders entries={entries} />
+
+  <section class="card mb-6 border-accent/30 bg-gradient-to-br from-accent/10 via-bg-soft to-pink-500/10">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h2 class="flex items-center gap-2 text-base font-semibold">
+        <span aria-hidden="true">🔍</span> <T k="search_title" />
+      </h2>
+      <button
+        id="search-toggle"
+        type="button"
+        class="badge flex items-center gap-1.5 border border-accent/50 bg-accent/20 px-3 py-1.5 text-sm font-semibold text-accent-soft transition-colors hover:border-accent hover:bg-accent/30 hover:text-accent"
+        aria-expanded="false"
+        aria-controls="search-panel"
+      >
+        <span aria-hidden="true">🔎</span> <T k="search_button" />
+      </button>
+    </div>
+
+    <div id="search-panel" hidden class="mt-4">
+      <input
+        id="search-input"
+        type="text"
+        autocomplete="off"
+        placeholder={t("search_placeholder", "tr")}
+        data-placeholder-tr={t("search_placeholder", "tr")}
+        data-placeholder-en={t("search_placeholder", "en")}
+        class="w-full rounded border border-border bg-bg-softer px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
+      />
+      <ul id="search-results" class="mt-3 flex flex-col gap-2"></ul>
+      <p id="search-empty" hidden class="mt-3 text-sm text-ink-muted">
+        <span aria-hidden="true">🙈</span> <T k="search_no_results" />
+      </p>
+    </div>
+  </section>
+
   <RetrospectiveTables entries={entries} />
 
   <section class="card">
@@ -34,4 +78,123 @@ const categories = Array.from(new Set(allNotes.map((n) => n.data.category))).sor
       }
     </ul>
   </section>
+
+  <script type="application/json" id="search-data" set:html={JSON.stringify(searchItems)} />
+
+  <script>
+    interface SearchItem {
+      slug: string;
+      title: string;
+      titleEn: string;
+      category: string;
+      subcategory: string;
+      tags: string[];
+    }
+
+    const dataEl = document.getElementById("search-data");
+    const data: SearchItem[] = dataEl ? JSON.parse(dataEl.textContent || "[]") : [];
+
+    const toggle = document.getElementById("search-toggle");
+    const panel = document.getElementById("search-panel");
+    const input = document.getElementById("search-input") as HTMLInputElement | null;
+    const resultsEl = document.getElementById("search-results");
+    const emptyEl = document.getElementById("search-empty");
+
+    // A little color per category so results aren't a wall of one hue -
+    // picked deterministically from the category name so the same category
+    // always gets the same emoji/color, without hardcoding actual category
+    // names (they're user-defined and open-ended).
+    const EMOJIS = ["📚", "💡", "🧠", "🎯", "🛠️", "🌟", "📌", "🎨", "🔬", "🎵", "🌱", "⚡"];
+    const COLORS = [
+      "border-accent/40 text-accent-soft",
+      "border-pink-400/40 text-pink-300",
+      "border-emerald-400/40 text-emerald-300",
+      "border-amber-400/40 text-amber-300",
+      "border-sky-400/40 text-sky-300",
+      "border-fuchsia-400/40 text-fuchsia-300",
+    ];
+
+    function hashStr(s: string): number {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+      return h;
+    }
+    function pick<T>(arr: T[], key: string): T {
+      return arr[hashStr(key) % arr.length];
+    }
+
+    function render(items: SearchItem[]) {
+      if (!resultsEl || !emptyEl) return;
+      resultsEl.innerHTML = "";
+      emptyEl.hidden = items.length !== 0;
+
+      for (const item of items) {
+        const emoji = pick(EMOJIS, item.category);
+        const color = pick(COLORS, item.category);
+
+        const li = document.createElement("li");
+        const a = document.createElement("a");
+        a.href = `/notes/${item.slug}/`;
+        a.className =
+          "card flex items-center gap-3 no-underline hover:border-accent transition-colors";
+
+        const emojiSpan = document.createElement("span");
+        emojiSpan.className = "text-lg";
+        emojiSpan.setAttribute("aria-hidden", "true");
+        emojiSpan.textContent = emoji;
+
+        const textWrap = document.createElement("span");
+        textWrap.className = "flex-1";
+        const titleEl = document.createElement("span");
+        titleEl.className = "block text-sm font-medium text-ink";
+        titleEl.textContent = item.title;
+        const metaEl = document.createElement("span");
+        metaEl.className = "block text-xs text-ink-muted";
+        metaEl.textContent = `${item.category} · ${item.subcategory}`;
+        textWrap.append(titleEl, metaEl);
+
+        const badge = document.createElement("span");
+        badge.className = `badge border ${color}`;
+        badge.textContent = item.category;
+
+        a.append(emojiSpan, textWrap, badge);
+        li.appendChild(a);
+        resultsEl.appendChild(li);
+      }
+    }
+
+    function applyPlaceholder() {
+      if (!input) return;
+      const lang = document.documentElement.dataset.lang === "en" ? "en" : "tr";
+      input.placeholder =
+        (lang === "en" ? input.dataset.placeholderEn : input.dataset.placeholderTr) || "";
+    }
+
+    toggle?.addEventListener("click", () => {
+      if (!panel) return;
+      const willShow = panel.hidden;
+      panel.hidden = !willShow;
+      toggle.setAttribute("aria-expanded", String(willShow));
+      if (willShow) {
+        applyPlaceholder();
+        render(data);
+        input?.focus();
+      }
+    });
+
+    input?.addEventListener("input", () => {
+      const q = input.value.trim().toLowerCase();
+      if (!q) {
+        render(data);
+        return;
+      }
+      const filtered = data.filter((item) => {
+        const haystack = `${item.title} ${item.titleEn} ${item.category} ${item.subcategory} ${item.tags.join(" ")}`.toLowerCase();
+        return haystack.includes(q);
+      });
+      render(filtered);
+    });
+
+    window.addEventListener("ss-lang-change", applyPlaceholder);
+  </script>
 </Layout>
