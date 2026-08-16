@@ -8,17 +8,48 @@ KURALI'na (v2) göre yeni bir konu notu oluştur ve topics.json'a kaydet.
 Ayrı session notu üretilmez - tüm bilgi konu notunun içindeki girdilerde
 tutulur. Yeni girdinin last_reminded alanını boş bırak, _manifest.json'da
 last_processed alanlarını güncelle, işlenen staging dosyalarını sil.
+
 İşlem bitince, eğer bu çalıştırmada en az bir staging dosyası gerçekten
-işlendiyse (yani Notes/'ta gerçek bir değişiklik oluştuysa),
+işlendiyse (yani Notes/'ta gerçek bir değişiklik oluştuysa): önce
+WEEKLY-SUMMARY ÜRETİM ADIMI'nı uygula (aşağıda ayrıca tanımlı), sonra
 DEPLOY TETİKLEYİCİ ADIMI'nı uygula (aşağıda ayrıca tanımlı), sonra
 sync.ps1'i "Layer C: automated weekly processing - [date]" mesajıyla
 çalıştır. Eğer staging klasörü zaten boştu ve hiçbir dosya işlenmediyse,
-deploy tetikleyici adımını ATLA (gereksiz bir Cloudflare rebuild'i
-tetiklenmesin) ama yine de sync.ps1'i çalıştır (başka bekleyen bir
-değişiklik varsa diye zararsızdır, private tarafta değişiklik yoksa
-zaten "Değişiklik yok" deyip atlar). Hiçbir adımda kullanıcı onayı
-bekleme, tüm kararları kendin ver, sonunda kısa bir özet raporu
-SCHEDULING/son-calisma-raporu.md dosyasına yaz.
+weekly-summary ve deploy tetikleyici adımlarını ATLA (gereksiz bir
+Cloudflare rebuild'i tetiklenmesin) ama yine de sync.ps1'i çalıştır
+(başka bekleyen bir değişiklik varsa diye zararsızdır, private tarafta
+değişiklik yoksa zaten "Değişiklik yok" deyip atlar). Hiçbir adımda
+kullanıcı onayı bekleme, tüm kararları kendin ver, sonunda kısa bir özet
+raporu SCHEDULING/son-calisma-raporu.md dosyasına yaz.
+
+WEEKLY-SUMMARY ÜRETİM ADIMI: Bu çalıştırmada işlenen her entry için
+(hangi Notes/ dosyasına, hangi tarihli girdinin eklendiği/güncellendiği
+bilgisi zaten elde, çünkü bu adım aynı çalıştırmanın sonunda uygulanıyor),
+içinde bulunulan haftanın ISO 8601 hafta numarasına göre
+(örn. 2026'nın 34. haftası → "2026-W34") Weekly-Summaries/2026-W34.md
+dosyasına bak. Yoksa oluştur, varsa güncelle:
+
+---
+type: weekly-summary
+week: '2026-W34'
+---
+## Bu Hafta Eklenen/Güncellenen Konular
+(Bu hafta işlenen her entry için: [[Not-Adı]] - kısa bir cümle, o
+girdide ne öğrenildiği/zorlanılan nokta neydi)
+
+## Gözlemlenen Desen
+(2-3 cümlelik bir gözlem - bu hafta ağırlıklı hangi konu alanına
+odaklanıldı, önceki haftalarla bir bağlantı var mı, vault'taki mevcut
+notlara bakarak çıkarılan bir yorum)
+
+Dosya zaten varsa (aynı hafta içinde Katman C birden fazla kez
+çalıştıysa), "Bu Hafta Eklenen/Güncellenen Konular" listesine yeni
+entry'leri ekle (aynı [[Not-Adı]] tekrar işlenmişse satırı güncelle,
+çoğaltma), "Gözlemlenen Desen"i güncel toplam duruma göre yeniden yaz.
+Bu, hatırlatma tablolarından (Bu Haftanın Hatırlatmaları, Haftalık/Aylık
+Geriye Dönük Özet) TAMAMEN AYRI, sadece raporlama amaçlı bir dosya -
+last_reminded/review_due mantığı içermez, entries[] listesi tutmaz,
+hatırlatma sistemine hiç dahil olmaz.
 
 DEPLOY TETİKLEYİCİ ADIMI: Cloudflare Pages, deploy'ları PUBLIC repo'daki
 (second-sight) push'ları izleyerek tetikliyor ve build sırasında PRIVATE
@@ -58,6 +89,28 @@ Birim artık tekil kavram değil, KONU. Bir pinli sohbetten genellikle TEK
 BİR konu notu çıkar (örn. "MCP.md", "Cache-Stampede.md"). Sadece sohbet
 gerçekten birbirinden kopuk, ilişkisiz 2-3 ayrı konuyu kapsıyorsa birden
 fazla nota böl.
+
+BAŞLIK DİLİ KURALI (bundan sonraki notlar için, GERİYE DÖNÜK UYGULANMAZ -
+mevcut notlara dokunma): Yeni bir konu notu oluşturulurken, dosya adı ve
+notun ana başlığı (v2'de bu, gövdede bir "# başlık" satırı değil,
+frontmatter'daki `title` alanı - dosya adının kendisi de bu başlıktan
+türetiliyor) şu mantığa göre belirlenir:
+- Konu mesleki/teknik ise (AI, yazılım mimarisi, Claude Developer
+  Platform, CCA-F müfredatı, programlama, sistem tasarımı vb.) BAŞLIK
+  İNGİLİZCE olsun (örn. "Devre Kesici Deseni" değil "Circuit Breaker
+  Pattern")
+- Konu kişisel/günlük ise (örn. kişisel planlama, İngilizce pratik
+  konuşma provası, günlük hayatla ilgili sohbetler) başlık TÜRKÇE
+  kalabilir
+- Bu kural SADECE dosya adı ve `title` alanına uygulanır - notun
+  içindeki entries[] etiketleri (`## [Tarih] — [Kısa Etiket]`) de aynı
+  mantığı takip etsin (teknik girdi → İngilizce etiket, kişisel girdi →
+  Türkçe etiket)
+- Gövde içeriği (anlatım) her zaman Türkçe kalır, sadece terimler
+  İngilizce - bu değişmiyor
+- `title_en` alanı normal işleyişine devam eder (zaten çoğu zaman
+  `title` ile aynı olacak teknik notlarda, çünkü `title` artık zaten
+  İngilizce)
 
 KONU NOTU İÇİNDE TARİHLİ GİRDİLER: Her yeni oturumda/sohbette o konuya
 dair öğrenilen bilgi, notun İÇİNE, kendi tarihini taşıyan ayrı bir
