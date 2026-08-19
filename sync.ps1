@@ -38,6 +38,7 @@ $privatePaths = @(
     "_index",
     "_ogrenme-tercihlerim.md",
     "SCHEDULING\son-calisma-raporu.md",
+    "PROJECT-STATUS.md",
     ".gitignore"
 )
 
